@@ -24,9 +24,9 @@
       "src/typings/",
       "node_modules/@types/"
     ],
-    "include": ["vite.config.ts"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
+  "include": ["vite.config.ts"],
 }
