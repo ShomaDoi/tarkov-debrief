@@ -1,7 +1,6 @@
 /* Stamp tool places a marker -- scav icon, pmc icon, etc */
 
-import { fabric } from "fabric";
-import { IEvent } from "fabric/fabric-impl";
+import * as fabric from "fabric";
 import { useEffect } from "react";
 import { SetToolFn, Tool, ToolType } from "./tool";
 
@@ -29,7 +28,7 @@ export const onChoice = (
   setSidebar(false);
 };
 
-const placeMarker = async (evt: IEvent) => {
+const placeMarker = async (evt: any) => {
   if (!maybeCanvas) return;
   const canvas = maybeCanvas!;
 
@@ -37,16 +36,12 @@ const placeMarker = async (evt: IEvent) => {
 
   let cachedImage = markerCache[markerUrl];
   if (!cachedImage) {
-    const newImage: fabric.Image = await new Promise((resolve) =>
-      fabric.Image.fromURL(markerUrl, resolve)
-    );
+    const newImage: fabric.Image = await fabric.Image.fromURL(markerUrl);
     markerCache[markerUrl] = newImage;
     cachedImage = newImage;
   }
 
-  const image: fabric.Image = await new Promise((resolve) =>
-    cachedImage.clone(resolve)
-  );
+  const image: fabric.Image = await cachedImage.clone();
 
   const pointer = canvas.getPointer(evt.e);
   image.left = pointer.x;

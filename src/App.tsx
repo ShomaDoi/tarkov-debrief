@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { fabric } from "fabric";
+import * as fabric from "fabric";
 import { TwitterPicker } from "react-color";
 import { Link, useParams } from "wouter";
 import "@/App.css";
@@ -11,11 +11,8 @@ import githubLogo from "./icons/github.png";
 import selectIcon from "./icons/select.svg";
 import pencilIcon from "./icons/pencil.svg";
 import eraserIcon from "./icons/eraser.svg";
-import undoIcon from "./icons/undo.svg";
 import addMarkerIcon from "./icons/marker.svg";
 import saveIcon from "./icons/save.svg";
-
-import { useUndo } from "./tools/undo";
 
 import thickPMCMarker from "./icons/pmc-thick.svg";
 import mediumPMCMarker from "./icons/pmc-med.svg";
@@ -59,6 +56,11 @@ function initializeCanvas() {
     fireMiddleClick: true,
     fireRightClick: true,
   });
+
+  // Fabric v6: Initialize brush if needed
+  if (!canvas.freeDrawingBrush) {
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+  }
 
   canvas.freeDrawingBrush.color = PENCIL_COLOR;
   canvas.freeDrawingBrush.width = brushWidth;
@@ -125,8 +127,6 @@ function App() {
     unerasable
   );
 
-  const { onUse: undo } = useUndo(maybeCanvas, appRef);
-
   const { onChoice: selectMarker } = useStamp(
     maybeCanvas,
     setSidebar,
@@ -159,14 +159,14 @@ function App() {
     if (!maybeCanvas) return;
     const canvas = maybeCanvas!;
 
-    fabric.Image.fromURL(maps[map], (imageInstance) => {
+    // Fabric v6: fromURL returns a Promise
+    fabric.Image.fromURL(maps[map]).then((imageInstance) => {
       image = imageInstance;
       image.canvas = canvas;
       image.selectable = false;
       backgroundImage = image;
       unerasable.add(backgroundImage.getSrc());
       canvas.add(image);
-      canvas.clearHistory();
     });
 
     function resizeListener() {
@@ -208,9 +208,6 @@ function App() {
           </button>
           <button onClick={setEraser}>
             <img src={eraserIcon} alt="eraser" />
-          </button>
-          <button onClick={undo}>
-            <img src={undoIcon} alt="undo" />
           </button>
           <button onClick={showSidebar}>
             <img src={addMarkerIcon} alt="undo" />

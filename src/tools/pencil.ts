@@ -1,4 +1,4 @@
-import { fabric } from "fabric";
+import * as fabric from "fabric";
 import { useEffect } from "react";
 import { ColorResult } from "react-color";
 import { Tool, ToolType, SetToolFn } from "./tool";
@@ -21,7 +21,7 @@ const onColorChoice = (color: ColorResult) => {
   const canvas = maybeCanvas!;
 
   setColor(color.hex);
-  if (canvas) {
+  if (canvas && canvas.freeDrawingBrush) {
     canvas.freeDrawingBrush.color = color.hex;
   }
 };
