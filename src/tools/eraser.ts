@@ -52,8 +52,8 @@ export const useEraser = (canvas: fabric.Canvas | null, setToolOuter: SetToolFn,
       return () => {
         if (canvas) {
           canvas.off("mouse:move", onUse);
-          canvas.off("mouse:move", onClick);
-          canvas.off("mouse:move", onRelease);
+          canvas.off("mouse:down", onClick);
+          canvas.off("mouse:up", onRelease);
           active = false;
         }
       };
