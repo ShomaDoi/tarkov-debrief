@@ -19,7 +19,7 @@ export const onChoice = () => {
 export const onUse = (opt: any) => {
   if (tool.type === ToolType.eraser && opt.target !== undefined && active) {
     if (
-      opt.target instanceof fabric.Image &&
+      opt.target instanceof fabric.FabricImage &&
       unerasable.has(opt.target.getSrc())
     ) {
       return;
