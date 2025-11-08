@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { fabric } from "fabric";
 import { TwitterPicker } from "react-color";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "wouter";
 import "@/App.css";
 import "@/Sidebar.css";
 

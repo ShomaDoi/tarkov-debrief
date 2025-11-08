@@ -5,21 +5,18 @@ import './index.css';
 import App from './App';
 import MapSelector from './MapSelector';
 import reportWebVitals from './reportWebVitals';
-import {
-  BrowserRouter as Router,
-  Switch,
-  Route,
-} from "react-router-dom";
+import { Router, Route, Switch } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 
 ReactGA.initialize('UA-189112106-1');
 ReactGA.pageview(window.location.pathname + window.location.search);
 
 ReactDOM.render(
   <React.StrictMode>
-    <Router basename="/tarkov-debrief">
+    <Router hook={useHashLocation} base="/tarkov-debrief">
       <Switch>
         <Route path="/app/:map">
-          <App />
+          {(params) => <App />}
         </Route>
         <Route path="/">
           <MapSelector />
