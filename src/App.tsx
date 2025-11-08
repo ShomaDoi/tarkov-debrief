@@ -149,7 +149,13 @@ function App() {
 
   // Run-once
   useEffect(() => {
-    setCanvas(initializeCanvas());
+    const canvas = initializeCanvas();
+    setCanvas(canvas);
+
+    // Cleanup: dispose canvas on unmount
+    return () => {
+      canvas.dispose();
+    };
   }, []);
 
   // Load map and ensure it's fullscreen
