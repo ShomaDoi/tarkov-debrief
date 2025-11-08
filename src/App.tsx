@@ -2,11 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { fabric } from "fabric";
 import { TwitterPicker } from "react-color";
 import { Link, useParams } from "react-router-dom";
-import "fabric-history";
-import "./App.css";
-import "./Sidebar.css";
+import "@/App.css";
+import "@/Sidebar.css";
 
-import { maps } from "./MapSelector";
+import { maps } from "@/MapSelector";
 
 import githubLogo from "./icons/github.png";
 import selectIcon from "./icons/select.svg";
