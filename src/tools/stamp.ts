@@ -70,7 +70,7 @@ export const useStamp = (
       canvas.on('mouse:down', placeMarker);
 
       return () => {
-        if (canvas && toolOuter.type !== ToolType.marker) {
+        if (canvas && toolOuter.type === ToolType.marker) {
           canvas.off('mouse:down', placeMarker);
           canvas.defaultCursor = 'auto';
           canvas.hoverCursor = 'auto';
