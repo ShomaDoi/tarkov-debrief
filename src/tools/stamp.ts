@@ -16,7 +16,8 @@ export const onChoice = (
 ) => {
   const target = evt.target as HTMLImageElement;
   markerUrl = target.src;
-  const cursorString = `url(${markerUrl}), auto`;
+  // Vite imports SVGs as URLs, need quotes for CSS cursor
+  const cursorString = `url("${markerUrl}"), auto`;
 
   if (maybeCanvas) {
     maybeCanvas.defaultCursor = cursorString;
