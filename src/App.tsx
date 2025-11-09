@@ -98,8 +98,6 @@ function App() {
     cursor: null,
   });
 
-  console.log("rerender");
-
   const [color, setColor] = useState<string>(PENCIL_COLOR);
   const [maybeCanvas, setCanvas] = useState<fabric.Canvas | null>(null);
   const [sidebar, setSidebar] = useState<boolean>(false);
