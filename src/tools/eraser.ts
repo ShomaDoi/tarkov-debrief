@@ -1,49 +1,40 @@
 import * as fabric from "fabric";
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { SetToolFn, Tool, ToolType } from "./tool";
 
-let maybeCanvas: fabric.Canvas | null;
-let tool: Tool;
-let setTool: SetToolFn;
-let unerasable: Set<string>;
-let active = false;
+export const useEraser = (canvas: fabric.Canvas | null, setTool: SetToolFn, tool: Tool, unerasable: Set<string>) => {
+  const activeRef = useRef(false);
 
-export const onChoice = () => {
-  setTool({
-    ...tool,
-    type: ToolType.eraser,
-    cursor: null,
-  });
-}
-
-export const onUse = (opt: any) => {
-  if (tool.type === ToolType.eraser && opt.target !== undefined && active) {
-    if (
-      opt.target instanceof fabric.FabricImage &&
-      unerasable.has(opt.target.getSrc())
-    ) {
-      return;
+  const onUse = useCallback((opt: any) => {
+    if (tool.type === ToolType.eraser && opt.target !== undefined && activeRef.current) {
+      if (
+        opt.target instanceof fabric.FabricImage &&
+        unerasable.has(opt.target.getSrc())
+      ) {
+        return;
+      }
+      canvas?.remove(opt.target!);
     }
-    maybeCanvas?.remove(opt.target!);
-  }
-}
+  }, [canvas, tool.type, unerasable]);
 
-const onClick = () => {
-  active = true;
-}
+  const onClick = useCallback(() => {
+    activeRef.current = true;
+  }, []);
 
-const onRelease = () => {
-  active = false;
-}
+  const onRelease = useCallback(() => {
+    activeRef.current = false;
+  }, []);
 
-export const useEraser = (canvas: fabric.Canvas | null, setToolOuter: SetToolFn, toolOuter: Tool, unerasableOuter: Set<string>) => {
-  maybeCanvas = canvas;
-  setTool = setToolOuter;
-  tool = toolOuter;
-  unerasable = unerasableOuter;
+  const onChoice = useCallback(() => {
+    setTool({
+      ...tool,
+      type: ToolType.eraser,
+      cursor: null,
+    });
+  }, [setTool, tool]);
 
   useEffect(() => {
-    if (toolOuter.type === ToolType.eraser && canvas) {
+    if (tool.type === ToolType.eraser && canvas) {
       canvas.on("mouse:move", onUse);
       canvas.on("mouse:down", onClick);
       canvas.on("mouse:up", onRelease);
@@ -54,11 +45,11 @@ export const useEraser = (canvas: fabric.Canvas | null, setToolOuter: SetToolFn,
           canvas.off("mouse:move", onUse);
           canvas.off("mouse:down", onClick);
           canvas.off("mouse:up", onRelease);
-          active = false;
+          activeRef.current = false;
         }
       };
     }
-  }, [toolOuter, canvas]);
+  }, [tool.type, canvas, onUse, onClick, onRelease]);
 
   return { onChoice, onUse };
 };
