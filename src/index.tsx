@@ -15,7 +15,7 @@ const container = document.getElementById('root')
 const root = createRoot(container!);
 root.render(
   <React.StrictMode>
-    <Router hook={useHashLocation} base="/tarkov-debrief">
+    <Router hook={useHashLocation}>
       <Switch>
         <Route path="/app/:map">
           {() => <App />}
