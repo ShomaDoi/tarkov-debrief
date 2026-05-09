@@ -44,6 +44,11 @@ const placeMarker = async (evt: any) => {
 
   const image: fabric.Image = await cachedImage.clone();
 
+  // Fabric v7 changed default origin to center; pin to top-left so the
+  // marker lands where the cursor's hotspot (top-left of the cursor SVG)
+  // is, not offset by half its size.
+  image.set({ originX: "left", originY: "top" });
+
   const pointer = canvas.getScenePoint(evt.e);
   image.left = pointer.x;
   image.top = pointer.y;

@@ -27,6 +27,13 @@ for (const map of MAPS) {
   });
 }
 
+// Regression note: fabric v7 changed the default origin from top-left to
+// center. The map background intentionally keeps the v7 default (center)
+// because it gives a more useful initial view than anchoring the top-left
+// corner. Markers, however, are pinned to originX:'left'/originY:'top'
+// in stamp.ts so they land where the cursor's hotspot is (cursor SVG's
+// top-left corner). If markers ever start appearing offset from the
+// click point, suspect that pin was lost.
 test("editor: draw a pencil stroke, place a marker, undo, save", async ({
   page,
 }) => {
