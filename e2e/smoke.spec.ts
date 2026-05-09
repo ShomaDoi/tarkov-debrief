@@ -1,0 +1,66 @@
+import { test, expect } from "@playwright/test";
+
+const MAPS = [
+  "customs",
+  "interchange",
+  "woods",
+  "labs",
+  "reserve",
+  "shoreline",
+  "factory",
+  "lighthouse",
+  "streets",
+  "groundZero",
+];
+
+test("map selector lists every map", async ({ page }) => {
+  await page.goto("/");
+  for (const map of MAPS) {
+    await expect(page.locator(`a[href="#/app/${map}"]`)).toBeVisible();
+  }
+});
+
+for (const map of MAPS) {
+  test(`opens ${map} and mounts a canvas`, async ({ page }) => {
+    await page.goto(`/#/app/${map}`);
+    await expect(page.locator("#canvas")).toBeAttached({ timeout: 10_000 });
+  });
+}
+
+test("editor: draw a pencil stroke, place a marker, undo, save", async ({
+  page,
+}) => {
+  await page.goto("/#/app/customs");
+  const canvas = page.locator("#canvas");
+  await expect(canvas).toBeAttached({ timeout: 10_000 });
+  // The "upper-canvas" sibling is the one fabric routes events through.
+  const interactive = page.locator(".upper-canvas");
+  await expect(interactive).toBeVisible();
+
+  // give fabric a moment to mount the background image before we interact
+  await page.waitForTimeout(500);
+
+  const box = await interactive.boundingBox();
+  if (!box) throw new Error("canvas has no bounding box");
+
+  // pencil stroke
+  await page.mouse.move(box.x + 100, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 200, box.y + 200, { steps: 10 });
+  await page.mouse.up();
+
+  // open marker sidebar, pick scav, place marker
+  await page.locator('button img[alt="markers"]').click();
+  await page.locator('img[alt="light PMC"]').last().click();
+  // sidebar should be hiding now; click the canvas to place marker
+  await interactive.click({ position: { x: 250, y: 150 } });
+
+  // undo button removes last marker
+  await page.locator('button img[alt="undo"]').click();
+
+  // save triggers a download
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator('button img[alt="save"]').click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("strategy.png");
+});
