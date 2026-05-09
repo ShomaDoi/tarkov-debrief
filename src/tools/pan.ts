@@ -1,67 +1,74 @@
 import * as fabric from "fabric";
 import type { TPointerEventInfo, TPointerEvent } from "fabric";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { SetToolFn, Tool, ToolType } from "./tool";
 
 type PointerInfo = TPointerEventInfo<TPointerEvent>;
 
-let maybeCanvas: fabric.Canvas | null;
-let tool: Tool;
-let prevTool: Tool;
-let setTool: SetToolFn;
-let lastPos: { x: number, y: number } = { x: 0, y: 0 };
-let active: boolean = false;
+export const usePan = (
+  canvas: fabric.Canvas | null,
+  setTool: SetToolFn,
+  tool: Tool,
+) => {
+  // Pan flips the active tool inside its own mouse:down handler. If the
+  // useEffect depended on `tool`, the parent re-render that follows
+  // setTool(...) would tear down the handlers mid-drag and the mouse:up
+  // handler that runs afterwards would see activeRef=false (wiped by
+  // the cleanup) and never restore the previous tool.
+  //
+  // So we register handlers once per canvas and read the live tool /
+  // setTool through refs that get updated on every render.
+  const toolRef = useRef(tool);
+  const setToolRef = useRef(setTool);
+  toolRef.current = tool;
+  setToolRef.current = setTool;
 
-export const onDrag = (opt: PointerInfo) => {
-  if (!maybeCanvas) return;
-  const canvas = maybeCanvas!;
-  const e = opt.e as MouseEvent;
-
-  var vpt = canvas.viewportTransform;
-  vpt![4] += e.clientX - lastPos.x;
-  vpt![5] += e.clientY - lastPos.y;
-  canvas.requestRenderAll();
-  lastPos = { x: e.clientX, y: e.clientY };
-};
-
-export const onStartDrag = (opt: PointerInfo) => {
-  const e = opt.e as MouseEvent;
-  if (e.button === 1) { // middle click
-    e.preventDefault();
-    prevTool = tool;
-    setTool({
-      ...tool,
-      type: ToolType.pan,
-    });
-    active = true;
-    lastPos = { x: e.clientX, y: e.clientY };
-    maybeCanvas?.on("mouse:move", onDrag);
-    if (maybeCanvas) maybeCanvas.isDrawingMode = false;
-  }
-}
-
-export const onStopDrag = () => {
-  if (active) {
-    active = false;
-    maybeCanvas?.off("mouse:move", onDrag);
-    setTool({
-      ...prevTool,
-    });
-  }
-}
-
-export const usePan = (canvasInstance: fabric.Canvas | null, setToolOuter: SetToolFn, toolOuter: Tool) => {
-  maybeCanvas = canvasInstance;
-  setTool = setToolOuter;
-  tool = toolOuter;
+  const activeRef = useRef(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
+  const prevToolRef = useRef<Tool | null>(null);
 
   useEffect(() => {
-    canvasInstance?.on("mouse:down", onStartDrag);
-    canvasInstance?.on("mouse:up", onStopDrag);
+    if (!canvas) return;
+
+    const onDrag = (opt: PointerInfo) => {
+      if (!activeRef.current) return;
+      const e = opt.e as MouseEvent;
+      const vpt = canvas.viewportTransform;
+      if (!vpt) return;
+      vpt[4] += e.clientX - lastPosRef.current.x;
+      vpt[5] += e.clientY - lastPosRef.current.y;
+      canvas.requestRenderAll();
+      lastPosRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const onStart = (opt: PointerInfo) => {
+      const e = opt.e as MouseEvent;
+      if (e.button !== 1) return; // middle click only
+      e.preventDefault();
+      const current = toolRef.current;
+      prevToolRef.current = current;
+      setToolRef.current({ ...current, type: ToolType.pan });
+      activeRef.current = true;
+      lastPosRef.current = { x: e.clientX, y: e.clientY };
+      canvas.isDrawingMode = false;
+      canvas.on("mouse:move", onDrag);
+    };
+
+    const onStop = () => {
+      if (!activeRef.current) return;
+      activeRef.current = false;
+      canvas.off("mouse:move", onDrag);
+      const prev = prevToolRef.current;
+      if (prev) setToolRef.current({ ...prev });
+    };
+
+    canvas.on("mouse:down", onStart);
+    canvas.on("mouse:up", onStop);
 
     return () => {
-      canvasInstance?.off("mouse:down", onStartDrag)
-      canvasInstance?.off("mouse:up", onStopDrag)
-    }
-  }, [canvasInstance]);
-}
+      canvas.off("mouse:down", onStart);
+      canvas.off("mouse:up", onStop);
+      canvas.off("mouse:move", onDrag);
+    };
+  }, [canvas]);
+};

@@ -1,89 +1,69 @@
 /* Stamp tool places a marker -- scav icon, pmc icon, etc */
 
 import * as fabric from "fabric";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { SetToolFn, Tool, ToolType } from "./tool";
-
-let setTool: SetToolFn;
-let tool: Tool;
-let setSidebar: (visible: boolean) => void;
-let markerUrl: string;
-let maybeCanvas: fabric.Canvas | null;
-const markerCache: Record<string, fabric.Image> = {};
-
-export const onChoice = (
-  evt: React.MouseEvent<HTMLButtonElement, MouseEvent>
-) => {
-  const target = evt.target as HTMLImageElement;
-  markerUrl = target.src;
-  // Vite imports SVGs as URLs, need quotes for CSS cursor
-  const cursorString = `url("${markerUrl}"), auto`;
-
-  if (maybeCanvas) {
-    maybeCanvas.defaultCursor = cursorString;
-    maybeCanvas.hoverCursor = cursorString;
-  }
-
-  setTool({ ...tool, type: ToolType.marker })
-
-  setSidebar(false);
-};
-
-const placeMarker = async (evt: any) => {
-  if (!maybeCanvas) return;
-  const canvas = maybeCanvas!;
-
-  if ((evt.e as MouseEvent).altKey) return;
-
-  let cachedImage = markerCache[markerUrl];
-  if (!cachedImage) {
-    const newImage: fabric.Image = await fabric.Image.fromURL(markerUrl);
-    markerCache[markerUrl] = newImage;
-    cachedImage = newImage;
-  }
-
-  const image: fabric.Image = await cachedImage.clone();
-
-  // Fabric v7 changed default origin to center; pin to top-left so the
-  // marker lands where the cursor's hotspot (top-left of the cursor SVG)
-  // is, not offset by half its size.
-  image.set({ originX: "left", originY: "top" });
-
-  const pointer = canvas.getScenePoint(evt.e);
-  image.left = pointer.x;
-  image.top = pointer.y;
-
-  const zoom = canvas.getZoom();
-  image.scale(1 / zoom);
-
-  canvas.add(image);
-};
-
 
 export const useStamp = (
   canvas: fabric.Canvas | null,
-  setSidebarOuter: (visible: boolean) => void,
-  toolOuter: Tool,
-  setToolOuter: SetToolFn,
+  setSidebar: (visible: boolean) => void,
+  tool: Tool,
+  setTool: SetToolFn,
 ) => {
-  tool = toolOuter;
-  setTool = setToolOuter;
-  setSidebar = setSidebarOuter;
-  maybeCanvas = canvas;
+  const markerUrlRef = useRef<string>("");
+  const cacheRef = useRef<Record<string, fabric.Image>>({});
+
+  const onChoice = useCallback(
+    (evt: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+      const target = evt.target as HTMLImageElement;
+      markerUrlRef.current = target.src;
+      const cursorString = `url("${target.src}"), auto`;
+
+      if (canvas) {
+        canvas.defaultCursor = cursorString;
+        canvas.hoverCursor = cursorString;
+      }
+
+      setTool({ ...tool, type: ToolType.marker });
+      setSidebar(false);
+    },
+    [canvas, setSidebar, setTool, tool],
+  );
 
   useEffect(() => {
-    if (canvas && toolOuter.type === ToolType.marker) {
-      canvas.on('mouse:down', placeMarker);
+    if (!canvas || tool.type !== ToolType.marker) return;
 
-      return () => {
-        if (canvas && toolOuter.type === ToolType.marker) {
-          canvas.off('mouse:down', placeMarker);
-          canvas.defaultCursor = 'auto';
-          canvas.hoverCursor = 'auto';
-        }
+    const placeMarker = async (evt: { e: MouseEvent | TouchEvent }) => {
+      if ((evt.e as MouseEvent).altKey) return;
+      const url = markerUrlRef.current;
+      if (!url) return;
+
+      let cached = cacheRef.current[url];
+      if (!cached) {
+        cached = await fabric.Image.fromURL(url);
+        cacheRef.current[url] = cached;
       }
-    }
-  }, [toolOuter, canvas]);
+
+      const image = await cached.clone();
+      // Pin to top-left so the cursor's hotspot lands at the marker corner.
+      // (fabric v7 default is center; see e2e/smoke.spec.ts regression note.)
+      image.set({ originX: "left", originY: "top" });
+
+      const pointer = canvas.getScenePoint(evt.e);
+      image.left = pointer.x;
+      image.top = pointer.y;
+      image.scale(1 / canvas.getZoom());
+
+      canvas.add(image);
+    };
+
+    canvas.on("mouse:down", placeMarker);
+    return () => {
+      canvas.off("mouse:down", placeMarker);
+      canvas.defaultCursor = "auto";
+      canvas.hoverCursor = "auto";
+    };
+  }, [canvas, tool.type]);
 
   return { onChoice };
 };

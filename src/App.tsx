@@ -33,8 +33,6 @@ const githubUrl = "https://github.com/jrocketfingers/tarkov-debrief";
 type Size = { width: number; height: number };
 
 const defaultSize: Size = { width: 300, height: 300 };
-let backgroundImage: fabric.Image;
-let unerasable = new Set<string>();
 
 function startDownload(url: string, name: string): void {
   const link = document.createElement("a");
@@ -102,6 +100,11 @@ function App() {
   const [color, setColor] = useState<string>(PENCIL_COLOR);
   const [maybeCanvas, setCanvas] = useState<fabric.Canvas | null>(null);
   const [sidebar, setSidebar] = useState<boolean>(false);
+  // Stable Set of object src URLs the eraser/undo must skip (e.g. the
+  // background map image). Owned by App so it survives re-renders, and
+  // gets reset on every map switch (PR 4 leak fix).
+  const unerasableRef = useRef<Set<string>>(new Set());
+  const unerasable = unerasableRef.current;
 
   const save = () => {
     if (maybeCanvas) {
@@ -161,17 +164,17 @@ function App() {
 
   // Load map and ensure it's fullscreen
   useEffect(() => {
-    let image: fabric.Image;
-
     if (!maybeCanvas) return;
-    const canvas = maybeCanvas!;
+    const canvas = maybeCanvas;
 
-    fabric.Image.fromURL(maps[map]).then((imageInstance) => {
-      image = imageInstance;
+    // Reset the unerasable allowlist; without this, switching maps would
+    // leave the previous map's image src registered, leaking across maps.
+    unerasable.clear();
+
+    fabric.Image.fromURL(maps[map]).then((image) => {
       image.canvas = canvas;
       image.selectable = false;
-      backgroundImage = image;
-      unerasable.add(backgroundImage.getSrc());
+      unerasable.add(image.getSrc());
       canvas.add(image);
     });
 

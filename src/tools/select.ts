@@ -1,35 +1,27 @@
 import * as fabric from "fabric";
-import { useEffect } from "react";
-import { Tool, ToolType, SetToolFn } from './tool';
+import { useCallback, useEffect } from "react";
+import { Tool, ToolType, SetToolFn } from "./tool";
 
-let tool: Tool;
-let setTool: SetToolFn;
-
-export const onChoice = () => {
-  setTool({
-    ...tool,
-    type: ToolType.select,
-    cursor: null,
-  });
-}
-
-export const useSelect = (canvasOuter: fabric.Canvas | null, setToolOuter: SetToolFn, toolOuter: Tool) => {
-  setTool = setToolOuter;
-  tool = toolOuter;
+export const useSelect = (
+  canvas: fabric.Canvas | null,
+  setTool: SetToolFn,
+  tool: Tool,
+) => {
+  const onChoice = useCallback(() => {
+    setTool({ ...tool, type: ToolType.select, cursor: null });
+  }, [setTool, tool]);
 
   useEffect(() => {
-    if (toolOuter.type === ToolType.select && canvasOuter) {
-      canvasOuter.selection = true;
-      canvasOuter.perPixelTargetFind = false;
+    if (!canvas || tool.type !== ToolType.select) return;
 
-      return () => {
-        if (canvasOuter) {
-          canvasOuter.selection = false;
-          canvasOuter.perPixelTargetFind = true;
-        }
-      };
-    }
-  }, [canvasOuter, toolOuter]);
+    canvas.selection = true;
+    canvas.perPixelTargetFind = false;
+
+    return () => {
+      canvas.selection = false;
+      canvas.perPixelTargetFind = true;
+    };
+  }, [canvas, tool.type]);
 
   return { onChoice };
 };
