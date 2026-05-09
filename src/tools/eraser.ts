@@ -1,11 +1,16 @@
 import * as fabric from "fabric";
+import type { TPointerEventInfo, TPointerEvent } from "fabric";
 import { useEffect, useRef, useCallback } from "react";
 import { SetToolFn, Tool, ToolType } from "./tool";
+
+type HoverInfo = TPointerEventInfo<TPointerEvent> & {
+  target?: fabric.FabricObject;
+};
 
 export const useEraser = (canvas: fabric.Canvas | null, setTool: SetToolFn, tool: Tool, unerasable: Set<string>) => {
   const activeRef = useRef(false);
 
-  const onUse = useCallback((opt: any) => {
+  const onUse = useCallback((opt: HoverInfo) => {
     if (tool.type === ToolType.eraser && opt.target !== undefined && activeRef.current) {
       if (
         opt.target instanceof fabric.FabricImage &&
@@ -13,7 +18,7 @@ export const useEraser = (canvas: fabric.Canvas | null, setTool: SetToolFn, tool
       ) {
         return;
       }
-      canvas?.remove(opt.target!);
+      canvas?.remove(opt.target);
     }
   }, [canvas, tool.type, unerasable]);
 

@@ -194,7 +194,7 @@ function App() {
     return () => {
       window.removeEventListener("resize", resizeListener);
     };
-  }, [map, maybeCanvas]);
+  }, [map, maybeCanvas, unerasable]);
 
   return (
     <div className="App" ref={appRef}>
