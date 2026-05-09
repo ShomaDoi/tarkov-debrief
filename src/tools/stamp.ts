@@ -44,7 +44,7 @@ const placeMarker = async (evt: any) => {
 
   const image: fabric.Image = await cachedImage.clone();
 
-  const pointer = canvas.getPointer(evt.e);
+  const pointer = canvas.getScenePoint(evt.e);
   image.left = pointer.x;
   image.top = pointer.y;
 

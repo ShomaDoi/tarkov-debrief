@@ -45,9 +45,9 @@ function MapSelector() {
         <Link className="App-header-title" to="/">Tarkov Debrief</Link>
       </header>
       <section className="MapList">
-        {Object.entries(maps).map(([key, value]) =>
+        {Object.keys(maps).map((key) =>
           <Link key={key} className="MapList-Card" to={`/app/${key}`}>
-            <img width={380} src={thumbnails[key]} alt="key"/>
+            <img width={380} src={thumbnails[key]} alt={key}/>
             <p>{key}</p>
           </Link>
         )}

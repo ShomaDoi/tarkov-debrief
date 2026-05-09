@@ -13,6 +13,7 @@ import pencilIcon from "./icons/pencil.svg";
 import eraserIcon from "./icons/eraser.svg";
 import addMarkerIcon from "./icons/marker.svg";
 import saveIcon from "./icons/save.svg";
+import undoIcon from "./icons/undo.svg";
 
 import thickPMCMarker from "./icons/pmc-thick.svg";
 import mediumPMCMarker from "./icons/pmc-med.svg";
@@ -25,6 +26,7 @@ import { useEraser } from "./tools/eraser";
 import { useStamp } from "./tools/stamp";
 import { useZoom } from "./tools/zoom";
 import { usePan } from "./tools/pan";
+import { useUndo } from "./tools/undo";
 
 const githubUrl = "https://github.com/jrocketfingers/tarkov-debrief";
 
@@ -57,7 +59,6 @@ function initializeCanvas() {
     fireRightClick: true,
   });
 
-  // Fabric v6: Initialize brush if needed
   if (!canvas.freeDrawingBrush) {
     canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
   }
@@ -105,7 +106,7 @@ function App() {
   const save = () => {
     if (maybeCanvas) {
       const url = maybeCanvas.toDataURL({ multiplier: 3 });
-      startDownload(url, "startegy.png");
+      startDownload(url, "strategy.png");
     }
   };
 
@@ -137,6 +138,8 @@ function App() {
   // FIXME: untie zoom tool from brush
   useZoom(maybeCanvas, brushWidth);
 
+  const { onUndo } = useUndo(maybeCanvas, unerasable);
+
   const showSidebar = () => {
     setSidebar(true);
   };
@@ -163,7 +166,6 @@ function App() {
     if (!maybeCanvas) return;
     const canvas = maybeCanvas!;
 
-    // Fabric v6: fromURL returns a Promise
     fabric.Image.fromURL(maps[map]).then((imageInstance) => {
       image = imageInstance;
       image.canvas = canvas;
@@ -214,7 +216,10 @@ function App() {
             <img src={eraserIcon} alt="eraser" />
           </button>
           <button onClick={showSidebar}>
-            <img src={addMarkerIcon} alt="undo" />
+            <img src={addMarkerIcon} alt="markers" />
+          </button>
+          <button onClick={onUndo} title="Undo (Ctrl/Cmd+Z)">
+            <img src={undoIcon} alt="undo" />
           </button>
           <button onClick={save}>
             <img

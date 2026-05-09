@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["es2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "esnext",
+    "types": ["vite/client"],
     "skipLibCheck": true,
 
     "moduleResolution": "bundler",
@@ -20,13 +21,9 @@
     "noUncheckedSideEffectImports": true,
     "forceConsistentCasingInFileNames": true,
 
-    "typeRoots": [
-      "src/typings/",
-      "node_modules/@types/"
-    ],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["vite.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

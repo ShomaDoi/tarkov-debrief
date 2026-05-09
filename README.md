@@ -1,6 +1,6 @@
 # Tarkov Debrief
 
-Live at https://jrocketfingers.github.io/tarkov-debrief
+Live at https://debrief.jrkt.dev
 
 Roadmap (of sorts) at https://www.notion.so/Tarkov-Debrief-8302e492076d42f294c47356989448dc
 
