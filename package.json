@@ -1,7 +1,7 @@
 {
   "name": "debrief",
   "version": "0.1.0",
-  "homepage": "https://jrocketfingers.github.io/tarkov-debrief",
+  "homepage": "https://debrief.jrkt.dev",
   "private": true,
   "dependencies": {
     "fabric": "^6.4.3",
