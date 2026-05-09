@@ -19,6 +19,5 @@ Even in successful raids, take some time aside while unpacking your loot to talk
 
 ### Known issues
 
-- Panning is currently disabled due to how wonky modifier tools are. Use zoom to move around the map
 - Some maps start way too zoomed-in (woods), due to a large difference in map resolution
 - Initial loads are unoptimized
