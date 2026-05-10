@@ -3,14 +3,14 @@ import { Link } from 'wouter';
 import "./MapSelector.css";
 
 import customs from "./maps/customs.png";
-import interchange from "./maps/interchange.png";
-import woods from "./maps/woods.png";
+import interchange from "./maps/interchange.webp";
+import woods from "./maps/woods.webp";
 import labs from "./maps/labs.jpg";
 import reserve from "./maps/reserve.png";
-import shoreline from "./maps/shoreline.png";
-import lighthouse from "./maps/lighthouse.png";
-import factory from "./maps/factory.jpg";
-import streets from "./maps/streets.png";
+import shoreline from "./maps/shoreline.webp";
+import lighthouse from "./maps/lighthouse.webp";
+import factory from "./maps/factory.webp";
+import streets from "./maps/streets.webp";
 import groundZero from "./maps/ground-zero.webp";
 
 import customsThumbnail from "./maps/customs-thumbnail.png";
@@ -22,7 +22,7 @@ import shorelineThumbnail from "./maps/shoreline-thumbnail.png";
 import lighthouseThumbnail from "./maps/lighthouse-thumbnail.png";
 import factoryThumbnail from "./maps/factory-thumbnail.png";
 import streetsThumbnail from "./maps/streets-thumbnail.png";
-import groundZeroThumbnail from "./maps/ground-zero.webp";
+import groundZeroThumbnail from "./maps/ground-zero-thumbnail.webp";
 
 export const maps: Record<string, string> = {customs, interchange, woods, labs, reserve, shoreline, factory, lighthouse, streets, groundZero};
 export const thumbnails: Record<string, string> = {
