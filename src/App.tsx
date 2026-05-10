@@ -176,6 +176,29 @@ function App() {
       image.selectable = false;
       unerasable.add(image.getSrc());
       canvas.add(image);
+
+      // Fit-to-viewport on initial load and on every map switch. Image's
+      // origin stays at center (fabric v7 default), so scaling around
+      // (canvas.w/2, canvas.h/2) puts the image's center at the canvas
+      // center and the entire map fits. We don't refit on window resize
+      // — by then the user has likely zoomed/panned somewhere meaningful.
+      const scale = Math.min(
+        canvas.getWidth() / image.width,
+        canvas.getHeight() / image.height,
+      );
+      canvas.setViewportTransform([
+        scale,
+        0,
+        0,
+        scale,
+        canvas.getWidth() / 2,
+        canvas.getHeight() / 2,
+      ]);
+      // Mirror zoom.ts's brush-width compensation for the fit zoom so
+      // pencil strokes render at the configured screen-pixel width.
+      if (canvas.freeDrawingBrush) {
+        canvas.freeDrawingBrush.width = brushWidth / scale;
+      }
     });
 
     function resizeListener() {

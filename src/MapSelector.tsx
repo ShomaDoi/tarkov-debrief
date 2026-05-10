@@ -2,26 +2,26 @@ import { Link } from 'wouter';
 
 import "./MapSelector.css";
 
-import customs from "./maps/customs.png";
+import customs from "./maps/customs.webp";
 import interchange from "./maps/interchange.webp";
 import woods from "./maps/woods.webp";
-import labs from "./maps/labs.jpg";
-import reserve from "./maps/reserve.png";
+import labs from "./maps/labs.webp";
+import reserve from "./maps/reserve.webp";
 import shoreline from "./maps/shoreline.webp";
 import lighthouse from "./maps/lighthouse.webp";
 import factory from "./maps/factory.webp";
 import streets from "./maps/streets.webp";
 import groundZero from "./maps/ground-zero.webp";
 
-import customsThumbnail from "./maps/customs-thumbnail.png";
-import interchangeThumbnail from "./maps/interchange-thumbnail.png";
-import woodsThumbnail from "./maps/woods-thumbnail.png";
-import labsThumbnail from "./maps/labs-thumbnail.png";
-import reserveThumbnail from "./maps/reserve-thumbnail.png";
-import shorelineThumbnail from "./maps/shoreline-thumbnail.png";
-import lighthouseThumbnail from "./maps/lighthouse-thumbnail.png";
-import factoryThumbnail from "./maps/factory-thumbnail.png";
-import streetsThumbnail from "./maps/streets-thumbnail.png";
+import customsThumbnail from "./maps/customs-thumbnail.webp";
+import interchangeThumbnail from "./maps/interchange-thumbnail.webp";
+import woodsThumbnail from "./maps/woods-thumbnail.webp";
+import labsThumbnail from "./maps/labs-thumbnail.webp";
+import reserveThumbnail from "./maps/reserve-thumbnail.webp";
+import shorelineThumbnail from "./maps/shoreline-thumbnail.webp";
+import lighthouseThumbnail from "./maps/lighthouse-thumbnail.webp";
+import factoryThumbnail from "./maps/factory-thumbnail.webp";
+import streetsThumbnail from "./maps/streets-thumbnail.webp";
 import groundZeroThumbnail from "./maps/ground-zero-thumbnail.webp";
 
 export const maps: Record<string, string> = {customs, interchange, woods, labs, reserve, shoreline, factory, lighthouse, streets, groundZero};

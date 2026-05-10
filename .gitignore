@@ -28,6 +28,9 @@ build/
 **/.nvimlog
 *.swp
 
+# Windows download metadata (NTFS alternate data streams)
+*:Zone.Identifier
+
 # playwright
 /test-results/
 /playwright-report/
