@@ -1,0 +1,82 @@
+/* Operator chip strip. Lives inside .App-header between the
+ * brand cluster (left) and the toolbar (right). The header was
+ * converted to a three-section flex by App.css; this wrapper just
+ * lays its chips out horizontally with a small gap.
+ *
+ * Style: tan-on-gunmetal to match the existing design system.
+ * Square corners, 1px walnut border, Bender typeface — see
+ * DESIGN.md.
+ */
+
+.OperatorChips {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  /* Header has color: #9a8866; we override per-chip below. */
+}
+
+.OperatorChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  height: 32px;
+  background: #c2b7a3;
+  border: 1px solid #5c513d;
+  font-family: 'Bender', sans-serif;
+  font-size: 14px;
+  color: #000;
+  cursor: pointer;
+  /* Square corners are load-bearing for the design system
+   * (see DESIGN.md). Don't add a border-radius here. */
+}
+
+.OperatorChip:hover {
+  background: #7b6c51;
+  color: #fff;
+}
+
+.OperatorChip.active {
+  /* Active = thicker outline in the operator's own color, drawn
+   * via outline so the layout doesn't shift between active and
+   * inactive states. */
+  outline: 2px solid currentColor;
+  outline-offset: -3px;
+}
+
+.OperatorChip.hidden {
+  opacity: 0.45;
+  /* When hidden, the chip is still clickable; clicking unhides
+   * (and activates). The dot strike-through is added in the
+   * pseudo-element below. */
+}
+
+.OperatorChip.hidden .OperatorChip-dot::after {
+  /* Diagonal slash through the color dot to convey "hidden". */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    45deg,
+    transparent 45%,
+    #000 45%,
+    #000 55%,
+    transparent 55%
+  );
+}
+
+.OperatorChip-dot {
+  display: inline-block;
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #000;
+}
+
+.OperatorChip-name {
+  font-weight: bolder;
+  text-transform: lowercase;
+  /* Matches the wider product voice — labels read like equipment
+   * tags (see DESIGN.md "Tone and voice"). */
+}

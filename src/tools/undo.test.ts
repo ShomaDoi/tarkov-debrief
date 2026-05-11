@@ -63,34 +63,10 @@ describe("useUndo", () => {
     expect(mock.remove).toHaveBeenCalledTimes(1);
   });
 
-  it("Ctrl+Z triggers undo when no input is focused", () => {
-    const mock = createMockCanvas();
-    renderHook(() => useUndo(asCanvas(mock), new Set()));
-    const obj = { id: "kbd-1" };
-    fire(mock, "object:added", { target: obj });
-
-    const event = new KeyboardEvent("keydown", { key: "z", ctrlKey: true });
-    window.dispatchEvent(event);
-    expect(mock.remove).toHaveBeenCalledWith(obj);
-  });
-
-  it("Ctrl+Z is suppressed when an input owns focus", () => {
-    const mock = createMockCanvas();
-    renderHook(() => useUndo(asCanvas(mock), new Set()));
-    fire(mock, "object:added", { target: { id: "kbd-2" } });
-
-    const input = document.createElement("input");
-    document.body.appendChild(input);
-    input.focus();
-    expect(document.activeElement).toBe(input);
-
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "z", ctrlKey: true })
-    );
-    expect(mock.remove).not.toHaveBeenCalled();
-
-    document.body.removeChild(input);
-  });
+  // Keyboard-driven undo tests live in
+  // src/hooks/useKeyboardShortcuts.test.ts — the Cmd/Ctrl+Z
+  // binding moved out of useUndo as part of the centralized
+  // keyboard hook migration (design doc §4.6).
 
   it("a no-op undo when stack is empty does nothing", () => {
     const mock = createMockCanvas();

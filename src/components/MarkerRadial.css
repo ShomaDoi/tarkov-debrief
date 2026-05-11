@@ -1,0 +1,83 @@
+/* Marker radial. Positioned absolutely at viewport coordinates;
+ * the parent renders it as a portal-ish overlay above the canvas.
+ * z-index above the canvas and the (now near-empty) sidebar.
+ *
+ * Visual style continues the design system: tan plate, chocolate
+ * border, walnut wedge dividers (here via the wedge buttons'
+ * own borders). Square corners.
+ */
+
+.MarkerRadial-backdrop {
+  /* Covers the viewport so outside-clicks are caught. Transparent
+   * so the canvas remains visible while the radial is open. */
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 19;
+}
+
+.MarkerRadial {
+  position: fixed;
+  z-index: 20;
+  background: #9a8866;
+  border: 2px solid #3d3629;
+  border-radius: 50%; /* round outer plate */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  /* The element itself is a positioning frame for the wedge
+   * buttons inside. Buttons are placed via left/top + transform. */
+}
+
+.MarkerRadial-wedge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #c2b7a3;
+  border: 1px solid #5c513d;
+  cursor: pointer;
+  /* Square wedge buttons (not pie slices). The radial container's
+   * round border-radius gives the menu its overall circular feel;
+   * the wedge buttons stay rectangular to keep hover/focus
+   * targets predictable. */
+}
+
+.MarkerRadial-wedge:hover:not(:disabled),
+.MarkerRadial-wedge:focus:not(:disabled) {
+  background: #7b6c51;
+  outline: 2px solid #3d3629;
+  outline-offset: 1px;
+}
+
+.MarkerRadial-wedge.empty {
+  /* Placeholder slot — see design doc §7.2. Visible-but-disabled
+   * so the future-vocabulary slots are discoverable without being
+   * interactive. */
+  background: #b3a78f;
+  cursor: not-allowed;
+}
+
+.MarkerRadial-icon {
+  width: 40px;
+  height: 40px;
+  /* Markers are SVGs sized larger than their button; downscale
+   * uniformly here so they all fit. */
+  pointer-events: none;
+}
+
+.MarkerRadial-cancel {
+  position: absolute;
+  background: #7b6c51;
+  border: 1px solid #3d3629;
+  border-radius: 50%;
+  color: #fff;
+  font-family: 'Bender', sans-serif;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.MarkerRadial-cancel:hover,
+.MarkerRadial-cancel:focus {
+  background: #5c513d;
+  outline: 2px solid #3d3629;
+}

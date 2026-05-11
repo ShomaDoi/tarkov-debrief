@@ -1,5 +1,6 @@
 import * as fabric from "fabric";
 import { useEffect } from "react";
+import { dashArrayForZoom } from "./dashCompensation";
 
 export const useZoom = (
   canvas: fabric.Canvas | null,
@@ -25,8 +26,25 @@ export const useZoom = (
       // adjusting the brush at other times is harmless but conceptually
       // muddled (the previous version did it unconditionally, hence the
       // old "untie zoom from brush" FIXME).
+      //
+      // Note: we intentionally do NOT recompensate dashArrays on
+      // existing plan-phase paths. Existing paths' dash patterns are
+      // baked in canvas units at creation time and scale naturally
+      // with the viewport — same semantics as any other canvas
+      // object. The compensation only runs at path:created
+      // (src/tools/pencil.ts) so a new stroke drawn at the current
+      // zoom matches the configured screen-pixel pattern.
       if (canvas.isDrawingMode && canvas.freeDrawingBrush) {
         canvas.freeDrawingBrush.width = brushWidth / zoom;
+        // Same idea for the live planning-stroke dash pattern —
+        // recompute so the gaps stay visually constant in screen px
+        // across the zoom transition. Only touch when active; null
+        // means record phase. The brush's dashArray drives the live
+        // preview; see src/App.tsx's "Brush strokeDashArray follows
+        // phase" effect for the canonical setter.
+        if (canvas.freeDrawingBrush.strokeDashArray) {
+          canvas.freeDrawingBrush.strokeDashArray = dashArrayForZoom(zoom);
+        }
       }
 
       event.preventDefault();

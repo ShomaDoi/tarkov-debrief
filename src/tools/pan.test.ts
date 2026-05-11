@@ -90,4 +90,68 @@ describe("usePan", () => {
     });
     expect(setTool).not.toHaveBeenCalled();
   });
+
+  describe("path 2 — Space-hold integration (tool.type === pan)", () => {
+    // Verifies R14: when the keyboard hook flips tool.type to 'pan',
+    // usePan must bind left-button drag handlers and actually pan
+    // the viewport. Without this, Space-hold pan would silently no-op.
+
+    it("disables drawing mode while pan is the active tool", () => {
+      const mock = createMockCanvas();
+      mock.isDrawingMode = true;
+      const { rerender } = renderHook(
+        ({ tool }: { tool: Tool }) => usePan(asCanvas(mock), vi.fn(), tool),
+        { initialProps: { tool: baseTool(ToolType.pencil) } },
+      );
+
+      expect(mock.isDrawingMode).toBe(true);
+      rerender({ tool: baseTool(ToolType.pan) });
+      expect(mock.isDrawingMode).toBe(false);
+    });
+
+    it("LEFT-button drag while tool.type === pan moves the viewport", () => {
+      const mock = createMockCanvas();
+      // Start the viewport at the origin
+      mock.viewportTransform = [1, 0, 0, 1, 0, 0];
+      renderHook(() =>
+        usePan(asCanvas(mock), vi.fn(), baseTool(ToolType.pan)),
+      );
+
+      fire(mock, "mouse:down", {
+        e: { button: 0, clientX: 100, clientY: 100 },
+      });
+      fire(mock, "mouse:move", {
+        e: { button: 0, clientX: 150, clientY: 120 },
+      });
+      // viewport should have translated by (50, 20)
+      expect(mock.viewportTransform[4]).toBe(50);
+      expect(mock.viewportTransform[5]).toBe(20);
+
+      fire(mock, "mouse:up", {});
+      // dragging stops — further movement shouldn't translate
+      fire(mock, "mouse:move", {
+        e: { button: 0, clientX: 300, clientY: 300 },
+      });
+      expect(mock.viewportTransform[4]).toBe(50);
+      expect(mock.viewportTransform[5]).toBe(20);
+    });
+
+    it("ignores right-click drag in pan mode (button reservation)", () => {
+      const mock = createMockCanvas();
+      mock.viewportTransform = [1, 0, 0, 1, 0, 0];
+      renderHook(() =>
+        usePan(asCanvas(mock), vi.fn(), baseTool(ToolType.pan)),
+      );
+      fire(mock, "mouse:down", {
+        e: { button: 2, clientX: 100, clientY: 100 },
+      });
+      fire(mock, "mouse:move", {
+        e: { button: 2, clientX: 200, clientY: 200 },
+      });
+      // No translation should have happened — right-button is
+      // reserved for the eraser quasi-mode.
+      expect(mock.viewportTransform[4]).toBe(0);
+      expect(mock.viewportTransform[5]).toBe(0);
+    });
+  });
 });

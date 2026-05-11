@@ -1,0 +1,52 @@
+/* Phase toggle — two-segment control next to the operator chips
+ * in the header. Visual language follows the same tan-on-gunmetal
+ * pattern as the rest of the chrome (see DESIGN.md). The dashed-
+ * vs-solid glyph in each segment ("───" vs "- - -") is a
+ * micro-preview of how the stroke will be drawn.
+ */
+
+.PhaseToggle {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: stretch;
+  border: 1px solid #5c513d;
+  /* Square corners. */
+}
+
+.PhaseToggle-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  height: 32px;
+  background: #c2b7a3;
+  border: none;
+  /* The two segments are separated by a single 1px walnut border;
+   * the second segment carries it on its left. */
+  font-family: 'Bender', sans-serif;
+  font-size: 14px;
+  font-weight: bolder;
+  text-transform: lowercase;
+  color: #000;
+  cursor: pointer;
+}
+
+.PhaseToggle-seg + .PhaseToggle-seg {
+  border-left: 1px solid #5c513d;
+}
+
+.PhaseToggle-seg:hover {
+  background: #7b6c51;
+  color: #fff;
+}
+
+.PhaseToggle-seg.active {
+  background: #7b6c51;
+  color: #fff;
+}
+
+.PhaseToggle-glyph {
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: -1px;
+}

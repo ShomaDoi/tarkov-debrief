@@ -56,10 +56,13 @@ test("editor: draw a pencil stroke, place a marker, undo, save", async ({
   await page.mouse.move(box.x + 200, box.y + 200, { steps: 10 });
   await page.mouse.up();
 
-  // open marker sidebar, pick scav, place marker
+  // Open the marker radial via the toolbar button, click a wedge,
+  // place a marker. (Phase 5 replaced the sidebar marker grid
+  // with this radial — design_p0_slice.md §7.)
   await page.locator('button img[alt="markers"]').click();
-  await page.locator('img[alt="light PMC"]').last().click();
-  // sidebar should be hiding now; click the canvas to place marker
+  // The radial wedges expose their marker label via aria-label.
+  await page.getByRole("button", { name: "light PMC" }).click();
+  // Radial dismisses on selection; click the canvas to place.
   await interactive.click({ position: { x: 250, y: 150 } });
 
   // undo button removes last marker

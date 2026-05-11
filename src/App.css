@@ -62,13 +62,20 @@ html, body {
 
 .App-header {
 	background-color: #282c34;
-	min-height: 50px;
+	/* The chip strip + phase toggle live inside the header; that
+	 * makes the header noticeably taller than the previous 50px.
+	 * We bump min-height so chip buttons have breathing room.
+	 * Phase 4 — design_p0_slice.md §5.7. */
+	min-height: 64px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
 	color: #9a8866;
 	padding: 0 1em;
+	/* Allow the middle section's flex:1 to compress on narrow
+	 * viewports without pushing the toolbar offscreen. */
+	gap: 12px;
 }
 
 .App-header-left {
@@ -78,6 +85,22 @@ html, body {
 	align-items: center;
 	min-height: 50px;
   justify-content: flex-start;
+}
+
+/* Middle section of the header: contains the operator chips and
+ * the phase toggle, centered. flex:1 lets it absorb available
+ * width while the left (brand) and right (toolbar) sections keep
+ * their natural widths. Three-section flex layout per §5.7. */
+.App-header-middle {
+	flex: 1;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	/* On a narrow viewport this row may wrap onto two visual lines;
+	 * that's acceptable for the desktop-first P0 scope (R13). */
+	flex-wrap: wrap;
 }
 
 .App-header-github-logo {

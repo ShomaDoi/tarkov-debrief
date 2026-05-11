@@ -3,11 +3,24 @@ import type * as fabric from "fabric";
 
 type Handler = (e: unknown) => void;
 
+// Minimal stand-in for fabric's upperCanvasEl. The eraser-core's
+// contextmenu suppression (design_p0_slice.md §4.5) attaches a DOM
+// listener here; we only need add/removeEventListener spies so tests
+// can assert the wiring without a real <canvas>.
+export interface MockUpperCanvasEl {
+  addEventListener: ReturnType<typeof vi.fn>;
+  removeEventListener: ReturnType<typeof vi.fn>;
+}
+
 export interface MockCanvas {
   on: ReturnType<typeof vi.fn>;
   off: ReturnType<typeof vi.fn>;
   add: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
+  // getObjects() is consumed by operator-visibility logic
+  // (design_p0_slice.md §5.6). Default returns []; individual tests
+  // override per-case via mockReturnValue([...]).
+  getObjects: ReturnType<typeof vi.fn>;
   getScenePoint: ReturnType<typeof vi.fn>;
   requestRenderAll: ReturnType<typeof vi.fn>;
   getZoom: ReturnType<typeof vi.fn>;
@@ -19,6 +32,8 @@ export interface MockCanvas {
   selection: boolean;
   perPixelTargetFind: boolean;
   viewportTransform: number[];
+  // See MockUpperCanvasEl above.
+  upperCanvasEl: MockUpperCanvasEl;
   _handlers: Map<string, Set<Handler>>;
   [key: string]: unknown;
 }
@@ -36,6 +51,7 @@ export function createMockCanvas(): MockCanvas {
     }),
     add: vi.fn(),
     remove: vi.fn(),
+    getObjects: vi.fn(() => []),
     getScenePoint: vi.fn(() => ({ x: 10, y: 20 })),
     requestRenderAll: vi.fn(),
     getZoom: vi.fn(() => 1),
@@ -47,6 +63,10 @@ export function createMockCanvas(): MockCanvas {
     selection: false,
     perPixelTargetFind: true,
     viewportTransform: [1, 0, 0, 1, 0, 0],
+    upperCanvasEl: {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    },
   };
 }
 
