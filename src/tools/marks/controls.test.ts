@@ -5,7 +5,11 @@ import {
   registerMark,
   _clearRegistryForTests,
 } from "./registry";
-import { SIGHTLINE_SPEC } from "./sightline";
+import {
+  SIGHTLINE_SPEC,
+  writeSightlineParams,
+  readSightlineParams,
+} from "./sightline";
 import {
   CONE_SPEC,
   writeConeParams,
@@ -135,17 +139,41 @@ describe("registerControls — install on selection", () => {
 });
 
 // ---- Sightline endpoint control actionHandler ---------------------
+//
+// After the §narrow-cone refactor sightline is a fabric.Path (filled
+// sector, fixed half-angle) parametrized by `__sightline` =
+// { origin, angle, range }. The endpoint handle lives at the
+// bisector tip and updates BOTH angle and range from the drag —
+// it cannot widen or narrow the cone (the spread is fixed). No 15°
+// snap on drag, matching the cone's apex/spread handles
+// (design doc §10.2; sightline.ts §buildControls comment).
 
 describe("sightline endpoint control", () => {
-  it("dragging without modifier snaps the endpoint to a 15° increment", () => {
-    const line = new fabric.Line([0, 0, 100, 0], { stroke: "#000" });
-    tagMarkType(line, "sightline");
-    const controls = SIGHTLINE_SPEC.buildControls!(line);
+  function makeSightline(params: {
+    origin: { x: number; y: number };
+    angle: number;
+    range: number;
+  }) {
+    const path = new fabric.Path("M 0 0", { stroke: "#000", fill: "#000" });
+    tagMarkType(path, "sightline");
+    writeSightlineParams(path, params);
+    return path;
+  }
+
+  it("drag updates angle and range from the raw cursor position (no snap)", () => {
+    const path = makeSightline({
+      origin: { x: 0, y: 0 },
+      angle: 0,
+      range: 100,
+    });
+    const controls = SIGHTLINE_SPEC.buildControls!(path);
     const endpoint = controls.endpoint!;
 
-    // Drag to (100, 17): raw angle atan2(17,100) ≈ 9.65°, snaps to
-    // 15° (the nearest 15° multiple). Range = √(100²+17²) ≈ 101.43.
-    // End = origin + range * (cos 15°, sin 15°) ≈ (97.98, 26.26).
+    // Drag to (100, 17): bisector aims at atan2(17, 100), range =
+    // √(100²+17²). No snap — the creation-time 15° snap (handled by
+    // useMark's applyAngleSnap) sets the INITIAL angle to a clean
+    // tactical bearing, but after commit the user wants freeform
+    // adjustment. Same convention as cone's apex/spread handles.
     const acted = endpoint.actionHandler!(
       new MouseEvent("mousemove"),
       {} as never,
@@ -153,41 +181,52 @@ describe("sightline endpoint control", () => {
       17,
     );
     expect(acted).toBe(true);
-    const range = Math.hypot(100, 17);
-    const θ = Math.PI / 12; // 15°
-    expect(line.x2).toBeCloseTo(range * Math.cos(θ), 6);
-    expect(line.y2).toBeCloseTo(range * Math.sin(θ), 6);
+    const p = readSightlineParams(path)!;
+    expect(p.angle).toBeCloseTo(Math.atan2(17, 100), 6);
+    expect(p.range).toBeCloseTo(Math.hypot(100, 17), 6);
   });
 
-  it("Shift-held drag commits the raw cursor position (no snap)", () => {
-    const line = new fabric.Line([0, 0, 100, 0]);
-    tagMarkType(line, "sightline");
-    const controls = SIGHTLINE_SPEC.buildControls!(line);
+  it("drag near origin returns false (refuses to commit a degenerate undo entry)", () => {
+    const path = makeSightline({
+      origin: { x: 50, y: 50 },
+      angle: 0,
+      range: 100,
+    });
+    const controls = SIGHTLINE_SPEC.buildControls!(path);
     const endpoint = controls.endpoint!;
 
-    endpoint.actionHandler!(
-      new MouseEvent("mousemove", { shiftKey: true }),
+    // Cursor at origin → newRange ≈ 0 → reject. Without this guard
+    // the user could collapse a sightline to an invisible point and
+    // still pay the undo cost. See sightline.ts actionHandler.
+    const acted = endpoint.actionHandler!(
+      new MouseEvent("mousemove"),
       {} as never,
-      150,
-      75,
+      50,
+      50,
     );
-    expect(line.x2).toBe(150);
-    expect(line.y2).toBe(75);
+    expect(acted).toBe(false);
+    // Params unchanged.
+    const p = readSightlineParams(path)!;
+    expect(p.angle).toBe(0);
+    expect(p.range).toBe(100);
   });
 
-  it("positionHandler reports the line's cursor-side endpoint in scene coords", () => {
-    const line = new fabric.Line([10, 20, 80, 90]);
-    tagMarkType(line, "sightline");
-    const controls = SIGHTLINE_SPEC.buildControls!(line);
+  it("positionHandler returns origin + range * (cos angle, sin angle)", () => {
+    const path = makeSightline({
+      origin: { x: 10, y: 20 },
+      angle: Math.PI / 4, // 45°
+      range: 100,
+    });
+    const controls = SIGHTLINE_SPEC.buildControls!(path);
     const endpoint = controls.endpoint!;
     const pt = endpoint.positionHandler!(
       {} as never,
       {} as never,
-      line as unknown as fabric.FabricObject,
+      path as unknown as fabric.FabricObject,
       endpoint,
     );
-    expect(pt.x).toBe(80);
-    expect(pt.y).toBe(90);
+    expect(pt.x).toBeCloseTo(10 + 100 * Math.cos(Math.PI / 4));
+    expect(pt.y).toBeCloseTo(20 + 100 * Math.sin(Math.PI / 4));
   });
 });
 

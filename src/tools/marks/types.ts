@@ -120,6 +120,20 @@ export interface MarkSpec {
    */
   applyPhase: (obj: fabric.FabricObject, phase: Phase) => void;
   /**
+   * Mutate an existing preview object to match new build params
+   * during a chained-click drag. Optional: when omitted, `useMark`
+   * falls back to the legacy `fabric.Line` x2/y2 mutation (the only
+   * other chained-click shape historically — see useMark.ts §
+   * chained-click). Marks whose preview is a `fabric.Path` (e.g.
+   * sightline post-§refactor) MUST implement this — the legacy
+   * fallback silently no-ops on a Path, freezing the preview at
+   * zero length.
+   */
+  updatePreview?: (
+    obj: fabric.FabricObject,
+    params: MarkBuildParams,
+  ) => void;
+  /**
    * Optional direct-manipulation hooks. Marks that support handle
    * editing implement both functions; marks that don't omit them and
    * `useUndo` skips `object:modified` for those marks. See §4.10.

@@ -222,10 +222,23 @@ export function useMark(spec: MarkSpec, options: UseMarkOptions) {
     // Suppress preview events: don't intercept clicks (we want
     // them on the canvas), don't enter selection, don't enter the
     // undo stack on add/remove.
+    //
+    // `objectCaching: false` is load-bearing for Path-shaped
+    // previews (sightline post-refactor). The cache canvas is
+    // sized once at object construction — when the path's bbox
+    // grows past the initial (zero-range) extents, fabric clips
+    // rendering to the now-too-small cache, producing a visible
+    // rectangular "mask" past which the path disappears. Live
+    // previews mutate every frame, so caching never amortizes
+    // anyway; the only cost is one uncached redraw per frame.
+    // Committed marks (built fresh by spec.build on commit) keep
+    // their default caching since they're long-lived. Same lesson
+    // would apply to any future Path-shaped chained-click mark.
     preview.set({
       selectable: false,
       evented: false,
       hoverCursor: spec.cursor,
+      objectCaching: false,
     });
     if (undo) undo.markTransient(preview);
     canvas.add(preview);
@@ -233,26 +246,45 @@ export function useMark(spec: MarkSpec, options: UseMarkOptions) {
 
     // Helper for both mouse:move and mouse:down: compute the
     // (possibly snapped) preview end given the current pointer
-    // event. Shift inverts the default (sightline default = snap).
+    // event. Default is smooth (freeform aim); Shift enables 15°
+    // angle snapping. This is the inverse of the original P1 design
+    // (which defaulted to snap-on) — playtesting showed smooth is
+    // the common case for sightlines because the chain anchor is
+    // already an arrow tip placed by the user, and the bisector
+    // wants to point at whatever the user is looking at, not at a
+    // clean tactical bearing. Snap stays available via Shift for
+    // the cases where bearings matter (e.g., compass-aligned LOS).
     const computeEnd = (e: { e: MouseEvent | TouchEvent }): Point => {
       // canvas.getScenePoint walks the viewport transform so we
       // get scene-space coordinates regardless of pan/zoom.
       const raw = canvas.getScenePoint(e.e);
-      // Mouse: Shift held → snap off. Touch: no modifier → keep
-      // snap on.
+      // Mouse: Shift held → snap on. Touch: no modifier reachable →
+      // always smooth (matches the default).
       const shiftHeld =
         e.e instanceof MouseEvent ? (e.e as MouseEvent).shiftKey : false;
-      const shouldSnap = !shiftHeld;
-      return shouldSnap ? applyAngleSnap(anchor, raw, SNAP_STEP) : raw;
+      return shiftHeld ? applyAngleSnap(anchor, raw, SNAP_STEP) : raw;
     };
 
     const onMouseMove = (e: { e: MouseEvent | TouchEvent }) => {
       const end = computeEnd(e);
-      // Sightline is a fabric.Line so we mutate x2/y2 directly. If
-      // future chained-click marks have a different shape, they'd
-      // expose an `updatePreview` hook on the spec; for now, line
-      // is the only chained-click shape.
-      (preview as fabric.Line).set({ x2: end.x, y2: end.y });
+      // Two paths: a Path-shaped preview (current sightline post-
+      // refactor) implements `spec.updatePreview` to regenerate its
+      // SVG command array from new params; legacy line-shaped previews
+      // mutate x2/y2 in place. The fallback survives in case a future
+      // chained-click mark stays line-shaped — but any Path-shaped
+      // preview MUST set updatePreview or the legacy mutation no-ops
+      // and the preview freezes at zero length. See types.ts on the
+      // MarkSpec.updatePreview hook for the rationale.
+      if (spec.updatePreview) {
+        spec.updatePreview(preview, {
+          kind: "chained-click",
+          anchor,
+          end,
+          color,
+        });
+      } else {
+        (preview as fabric.Line).set({ x2: end.x, y2: end.y });
+      }
       canvas.requestRenderAll();
     };
 
