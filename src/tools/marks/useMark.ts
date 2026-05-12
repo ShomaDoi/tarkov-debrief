@@ -693,27 +693,30 @@ export function useMark(spec: MarkSpec, options: UseMarkOptions) {
 
       it.on("editing:exited", handleEditingExited);
       editing = it;
-
-      // Lift shortcut suspension now that the IText has focus.
-      // From this moment on, the hidden textarea is
-      // document.activeElement, so useKeyboardShortcuts' built-in
-      // `isInput` check bails for typed letters — they go to the
-      // IText, not to a tool binding. Keeping suspension ON during
-      // editing would just block toolbar / keyboard tool switches
-      // unnecessarily (the user reported it as "cannot exit to
-      // any other tool"). The Esc handler below + fabric.IText's
-      // own Esc→exitEditing in keysMap still let the user leave
-      // edit mode cleanly.
-      if (suspendedRef) suspendedRef.current = false;
+      // NOTE: suspension stays true while the IText is editing.
+      // Belt-and-suspenders: under normal flow the hidden textarea
+      // is document.activeElement and useKeyboardShortcuts'
+      // `isInput` check bails on its own; if for any reason focus
+      // strays (HMR re-mount, browser quirk, an effect that
+      // re-focuses the canvas container), suspension still blocks
+      // unmodified letters from matching tool bindings and tearing
+      // down the editor. Lifting suspension on click would
+      // re-introduce the regression where a stray focus + typed
+      // letter would switch tools and the user perceives
+      // "everything loses focus and nothing happens."
     };
 
-    // Suspend the global shortcut hook ONLY while the text tool is
-    // active AND waiting for the user's first click. Without this,
-    // pressing an unmodified letter (e.g. `a`) before clicking
-    // would match the arrow binding in App.tsx and tear text mode
-    // down — the user perceives this as "I typed and it popped me
-    // out." Once they click and the IText takes focus, suspension
-    // lifts in `onMouseDown` above and isInput takes over.
+    // Suspend the global shortcut hook for the entire text-mode
+    // lifetime. While waiting for the first click, this prevents
+    // letter keys from matching other tool bindings (the original
+    // "I typed and it popped me out" symptom). While editing, it
+    // backstops the textarea's focus — typed letters reach the
+    // textarea via the browser's default input flow regardless of
+    // whether `isInput` catches at the window-handler level.
+    // Tool switching while in text mode: press Esc (cancels if
+    // no IText, exits the IText otherwise) then the tool key. The
+    // hotkeys overlay documents this; the toolbar buttons also
+    // remain clickable.
     if (suspendedRef) suspendedRef.current = true;
 
     // Esc cancels text mode WHEN NO IText is in flight yet — gives

@@ -313,20 +313,24 @@ describe("useMark(TEXT_SPEC) — text interaction", () => {
     expect(suspendedRef.current).toBe(false);
   });
 
-  it("lifts suspension as soon as the first click places the IText", () => {
-    // The previous "always-on while text-mode-active" model
-    // blocked V/B/E even after the IText took focus — the user
-    // reported it as "cannot exit to any other tool" because
-    // letter-keyed tool bindings stayed suppressed for the
-    // entire text session. Once the textarea is focused, the
-    // global hook's `isInput` check handles keystroke routing
-    // on its own and suspension becomes redundant. Lifting it
-    // here lets the user switch tools via keyboard after Esc
-    // (or via toolbar) without ceremony.
+  it("keeps suspension on through the click and during editing", () => {
+    // Suspension is held for the ENTIRE text-mode lifetime, not
+    // just the pre-click window. Rationale (belt-and-suspenders):
+    // under normal flow the hidden textarea is the active element
+    // and useKeyboardShortcuts' isInput check would bail anyway,
+    // but if focus strays for any reason (HMR re-mount, browser
+    // quirk, a stray re-focus on the canvas container),
+    // suspension still blocks unmodified letters from matching
+    // tool bindings and tearing the editor down. The user's
+    // symptom was "everything loses focus and nothing happens" —
+    // that was the lifted-suspension model letting strayed-focus
+    // keystrokes switch tools. The trade-off is that switching
+    // tools via keyboard requires Esc first (cancels text mode);
+    // the hotkeys overlay documents this.
     const mock = createMockCanvas();
     mock.getScenePoint = vi.fn(() => ({ x: 50, y: 30 }));
     const suspendedRef = { current: false };
-    renderHook(() =>
+    const { unmount } = renderHook(() =>
       useMark(
         TEXT_SPEC,
         makeOpts({
@@ -339,6 +343,10 @@ describe("useMark(TEXT_SPEC) — text interaction", () => {
     fire(mock, "mouse:down", {
       e: new MouseEvent("mousedown", { button: 0 }),
     });
+    // Still suspended after the click (IText now in flight).
+    expect(suspendedRef.current).toBe(true);
+    unmount();
+    // Lifts only when text mode itself unmounts.
     expect(suspendedRef.current).toBe(false);
   });
 
