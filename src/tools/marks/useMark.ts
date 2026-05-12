@@ -663,14 +663,23 @@ export function useMark(spec: MarkSpec, options: UseMarkOptions) {
       const at = canvas.getScenePoint(e.e);
       const color = resolveColor(spec, activeOperatorRef.current);
       const it = spec.build({ kind: "text", at, color }) as fabric.IText;
-      // Pre-style the editor by phase so the live preview matches
-      // the eventual commit.
-      spec.applyPhase(it, phaseRef.current);
       // Mark transient BEFORE add so the empty-text add is invisible
       // to undo (design doc §8.2). We unmark on commit if the text
       // is non-empty.
       if (undo) undo.markTransient(it);
+      // Add to canvas FIRST so `it.canvas` is set when applyPhase
+      // triggers fabric.IText's measurement pipeline. Pre-add
+      // applyPhase calls `it.set({fontStyle, underline})` which in
+      // turn invokes `initDimensions` → `_measureLine`, and that
+      // path needs a live canvas 2D context to read text metrics.
+      // Doing applyPhase before add leaves the IText with stale
+      // dimensions, which can confuse fabric's hiddenTextarea
+      // setup on `enterEditing` — the textarea ends up not
+      // receiving input even though `isEditing` reads true.
+      // The user-visible symptom of getting that wrong was "I
+      // click, see the caret, but typing does nothing."
       canvas.add(it);
+      spec.applyPhase(it, phaseRef.current);
       it.enterEditing();
       // Some fabric versions don't auto-focus the hidden textarea
       // on enterEditing in headless test environments. Calling focus
@@ -684,17 +693,27 @@ export function useMark(spec: MarkSpec, options: UseMarkOptions) {
 
       it.on("editing:exited", handleEditingExited);
       editing = it;
+
+      // Lift shortcut suspension now that the IText has focus.
+      // From this moment on, the hidden textarea is
+      // document.activeElement, so useKeyboardShortcuts' built-in
+      // `isInput` check bails for typed letters — they go to the
+      // IText, not to a tool binding. Keeping suspension ON during
+      // editing would just block toolbar / keyboard tool switches
+      // unnecessarily (the user reported it as "cannot exit to
+      // any other tool"). The Esc handler below + fabric.IText's
+      // own Esc→exitEditing in keysMap still let the user leave
+      // edit mode cleanly.
+      if (suspendedRef) suspendedRef.current = false;
     };
 
-    // Suspend the global shortcut hook while the text tool is
-    // active. Without this, pressing an unmodified letter (e.g.
-    // `a`) BEFORE the user has clicked to place the IText would
-    // match the arrow binding in App.tsx, switch the active
-    // tool, and tear text mode down — the user perceives this as
-    // "I typed and it popped me out." Once they click and the
-    // IText takes focus, useKeyboardShortcuts's `isInput` guard
-    // handles things on its own; suspension is redundant from
-    // that moment on but harmless to leave on.
+    // Suspend the global shortcut hook ONLY while the text tool is
+    // active AND waiting for the user's first click. Without this,
+    // pressing an unmodified letter (e.g. `a`) before clicking
+    // would match the arrow binding in App.tsx and tear text mode
+    // down — the user perceives this as "I typed and it popped me
+    // out." Once they click and the IText takes focus, suspension
+    // lifts in `onMouseDown` above and isInput takes over.
     if (suspendedRef) suspendedRef.current = true;
 
     // Esc cancels text mode WHEN NO IText is in flight yet — gives

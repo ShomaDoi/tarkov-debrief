@@ -289,7 +289,7 @@ describe("useMark(TEXT_SPEC) — text interaction", () => {
     expect(mock.add).toHaveBeenCalledTimes(1);
   });
 
-  it("suspends global shortcuts while the text tool is active", () => {
+  it("suspends global shortcuts while waiting for the first click", () => {
     // Regression for the "type any letter and you pop out of text
     // mode" bug. Without suspension, unmodified letter keys
     // (e.g. `a`) match other tool bindings in App.tsx and switch
@@ -310,6 +310,35 @@ describe("useMark(TEXT_SPEC) — text interaction", () => {
     );
     expect(suspendedRef.current).toBe(true);
     unmount();
+    expect(suspendedRef.current).toBe(false);
+  });
+
+  it("lifts suspension as soon as the first click places the IText", () => {
+    // The previous "always-on while text-mode-active" model
+    // blocked V/B/E even after the IText took focus — the user
+    // reported it as "cannot exit to any other tool" because
+    // letter-keyed tool bindings stayed suppressed for the
+    // entire text session. Once the textarea is focused, the
+    // global hook's `isInput` check handles keystroke routing
+    // on its own and suspension becomes redundant. Lifting it
+    // here lets the user switch tools via keyboard after Esc
+    // (or via toolbar) without ceremony.
+    const mock = createMockCanvas();
+    mock.getScenePoint = vi.fn(() => ({ x: 50, y: 30 }));
+    const suspendedRef = { current: false };
+    renderHook(() =>
+      useMark(
+        TEXT_SPEC,
+        makeOpts({
+          canvas: asCanvas(mock),
+          suspendedRef,
+        }),
+      ),
+    );
+    expect(suspendedRef.current).toBe(true);
+    fire(mock, "mouse:down", {
+      e: new MouseEvent("mousedown", { button: 0 }),
+    });
     expect(suspendedRef.current).toBe(false);
   });
 
