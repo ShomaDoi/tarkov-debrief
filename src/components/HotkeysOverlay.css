@@ -1,0 +1,147 @@
+/* Hotkeys overlay. Modal-style sheet centered in the viewport.
+ *
+ * Visual style matches the rest of the canvas chrome:
+ * tan-on-gunmetal plate, walnut border, square corners. The kbd
+ * "keys" pills get a subtle dark plate so they read as distinct
+ * from the descriptive text.
+ */
+
+.HotkeysOverlay-backdrop {
+  /* Translucent backdrop — both catches outside-clicks AND visually
+   * dims the canvas so the overlay reads as foreground. */
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 29;
+}
+
+.HotkeysOverlay {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  /* Width caps so the grid doesn't sprawl on ultra-wide screens; the
+   * grid inside collapses to one column on narrower viewports. */
+  width: min(720px, calc(100vw - 64px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+
+  background: #9a8866;
+  border: 2px solid #3d3629;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4);
+
+  padding: 20px 24px;
+  font-family: "Bender", sans-serif;
+  color: #1a1714;
+}
+
+.HotkeysOverlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #5c513d;
+}
+
+.HotkeysOverlay-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.HotkeysOverlay-close {
+  background: transparent;
+  border: 1px solid #5c513d;
+  color: #1a1714;
+  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  /* Keep the X visually balanced — fabric's default button font
+   * metrics offset slightly. */
+  line-height: 1;
+}
+
+.HotkeysOverlay-close:hover,
+.HotkeysOverlay-close:focus-visible {
+  background: #c2b7a3;
+  outline: none;
+}
+
+.HotkeysOverlay-grid {
+  /* Two-column grid where it fits, single column when the dialog
+   * gets narrow (mobile / small tablet). */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+}
+
+@media (max-width: 540px) {
+  .HotkeysOverlay-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.HotkeysOverlay-section {
+  /* Each section is a labeled group of rows. */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.HotkeysOverlay-sectionTitle {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #3d3629;
+  border-bottom: 1px dashed #5c513d;
+  padding-bottom: 4px;
+}
+
+.HotkeysOverlay-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.HotkeysOverlay-row {
+  display: grid;
+  /* Fixed first column so the key pills align across rows; second
+   * column takes the rest. */
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.HotkeysOverlay-keys {
+  display: inline-block;
+  background: #2b2620;
+  color: #e8dec5;
+  font-family: "Bender", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border: 1px solid #5c513d;
+  /* Slight inset shadow gives the pill a "key cap" feel. */
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+.HotkeysOverlay-label {
+  font-size: 14px;
+  color: #1a1714;
+}

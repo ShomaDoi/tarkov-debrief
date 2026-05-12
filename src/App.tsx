@@ -22,6 +22,16 @@ import scavMarker from "./icons/scav.svg";
 import { Tool, ToolType } from "./tools/tool";
 import { useSelect } from "./tools/select";
 import { usePencil } from "./tools/pencil";
+import { useArrow } from "./tools/arrow";
+import { useMark } from "./tools/marks/useMark";
+import { registerControls } from "./tools/marks/controls";
+import { registerMark } from "./tools/marks/registry";
+import { SIGHTLINE_SPEC } from "./tools/marks/sightline";
+import { CONE_SPEC } from "./tools/marks/cone";
+import { ENGAGEMENT_X_SPEC } from "./tools/marks/engagementX";
+import { SOUND_PING_SPEC } from "./tools/marks/soundPing";
+import { POSITION_DOT_SPEC } from "./tools/marks/positionDot";
+import { TEXT_SPEC } from "./tools/marks/text";
 import { useEraser } from "./tools/eraser";
 import { useStamp } from "./tools/stamp";
 import { useZoom } from "./tools/zoom";
@@ -45,13 +55,19 @@ import {
   type OperatorId,
 } from "./state/operators";
 import { loadPhase, savePhase, type Phase } from "./state/phase";
-import { readOperator } from "./tools/metadata";
+import { loadTool, saveTool, isTransientTool } from "./state/tool";
+import {
+  readMarkType,
+  readOperator,
+  readArrowTip,
+} from "./tools/metadata";
 import { OperatorChips } from "./components/OperatorChips";
 import { PhaseToggle } from "./components/PhaseToggle";
 import {
   MarkerRadial,
   type MarkerOption,
 } from "./components/MarkerRadial";
+import { HotkeysOverlay } from "./components/HotkeysOverlay";
 
 const githubUrl = "https://github.com/jrocketfingers/tarkov-debrief";
 
@@ -134,11 +150,16 @@ function App() {
   const { map } = useParams<Params>();
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<HTMLDivElement>(null);
-  const [tool, setTool] = useState<Tool>({
-    type: ToolType.pencil,
+  // Lazy initializer reads the persisted active tool from
+  // localStorage. One-shot tools (sightline, cone, text) soft-fail
+  // to the default — design doc §9.3 §15.1 R-E. The `active` and
+  // `cursor` fields are derived state and re-established by each
+  // tool hook on activation; we only persist the ToolType itself.
+  const [tool, setTool] = useState<Tool>(() => ({
+    type: loadTool(),
     active: false,
     cursor: null,
-  });
+  }));
 
   const [color, setColor] = useState<string>(PENCIL_COLOR);
   const [maybeCanvas, setCanvas] = useState<fabric.Canvas | null>(null);
@@ -148,6 +169,25 @@ function App() {
   // gets reset on every map switch (PR 4 leak fix).
   const unerasableRef = useRef<Set<string>>(new Set());
   const unerasable = unerasableRef.current;
+  // Chain anchor for sightline + cone (and any future "off the last
+  // arrow tip" mark). NOT directly set by the arrow tool — instead,
+  // each arrow group carries its own `__arrowTip` metadata
+  // (see tools/metadata.ts + tools/arrow.ts) and a canvas-level
+  // subscriber below walks objects in reverse on every add/remove
+  // to find the most-recent arrow's tip. This lets undo, eraser,
+  // and any future redo update the anchor automatically — without
+  // each mutation path having to know about the chain anchor.
+  // Reset on map switch alongside `unerasable` so map-A coordinates
+  // don't leak into map-B's chain.
+  const lastArrowTipRef = useRef<{ x: number; y: number } | null>(null);
+  // Shortcut suspension ref, shared with MarkerRadial,
+  // HotkeysOverlay, and useMark's text-interaction effect. The
+  // text effect flips it true while waiting for the user's first
+  // click — without that, unmodified letter keystrokes would
+  // match other tool bindings (e.g. `a` → arrow) and tear text
+  // mode down. Declared this high because useMark(TEXT_SPEC, …)
+  // runs below and needs it in scope.
+  const shortcutsSuspended = useRef<boolean>(false) as SuspensionRef;
 
   // === Operator + phase state (Phase 4 of design_p0_slice.md) ===
   //
@@ -179,6 +219,19 @@ function App() {
   useEffect(() => {
     savePhase(phase);
   }, [phase]);
+  // Persist the active tool, skipping transient one-shots so a
+  // mid-gesture reload doesn't leave the user in a tool whose
+  // anchor (lastArrowTipRef) is gone. Design doc §9.3.
+  //
+  // Spring-loaded quasi-modes (Space-hold pan, RMB-hold eraser)
+  // ALSO write through here because their final `setTool` call
+  // restores the previous tool — so the persisted value is always
+  // the user's intended "resting" tool, not the transient flip.
+  // No churn-suppression needed beyond the transient-skip.
+  useEffect(() => {
+    if (isTransientTool(tool.type)) return;
+    saveTool(tool.type);
+  }, [tool.type]);
 
   const activeOperator = useMemo(
     () => getActiveOperator(operators, activeOperatorId),
@@ -191,6 +244,12 @@ function App() {
       startDownload(url, "strategy.png");
     }
   };
+
+  // useUndo first so its full API (markTransient, popLastAction,
+  // recordAdd, …) is available to tool hooks that need it — most
+  // notably useArrow's path→group swap (design doc §5.1 step 8).
+  const undoApi = useUndo(maybeCanvas, unerasable);
+  const { onUndo } = undoApi;
 
   const { onChoice: setSelect } = useSelect(maybeCanvas, setTool, tool);
 
@@ -207,7 +266,86 @@ function App() {
     setColor,
     activeOperatorId,
     phase,
+    undoApi,
   );
+
+  // useArrow shares useFreehand with pencil but adds the arrowhead
+  // postprocess (design doc §5.1). The path→group swap consumes the
+  // undo API to retract the path's auto-add and mark the path
+  // transient — only the resulting group lands on the undo stack.
+  // lastArrowTipRef is updated every time an arrow commits, feeding
+  // sightline + cone chains.
+  const { onChoice: setArrow } = useArrow(
+    maybeCanvas,
+    setTool,
+    tool,
+    activeOperatorId,
+    phase,
+    undoApi,
+  );
+
+  // Sightline is the first chained-click MarkSpec consumer. The
+  // useMark factory implements the activation soft-fail + preview
+  // + commit + auto-revert lifecycle; see useMark.ts for the flow
+  // and design doc §4.5 for the contract.
+  const { onChoice: setSightline } = useMark(SIGHTLINE_SPEC, {
+    canvas: maybeCanvas,
+    tool,
+    setTool,
+    activeOperator,
+    activeOperatorId,
+    phase,
+    lastArrowTipRef,
+    undo: undoApi,
+  });
+
+  // Cone — the chained-drag MarkSpec consumer. Origin = last arrow
+  // tip; mouse:down sets the first edge direction; the integrated
+  // signed sweep during the drag determines the angular extent
+  // (reflex sectors supported); release commits and auto-reverts
+  // to arrow. See design doc §6.
+  const { onChoice: setCone } = useMark(CONE_SPEC, {
+    canvas: maybeCanvas,
+    tool,
+    setTool,
+    activeOperator,
+    activeOperatorId,
+    phase,
+    lastArrowTipRef,
+    undo: undoApi,
+  });
+
+  // Point marks (engagement X, sound ping, position dot) and text
+  // label. All sticky for the point set (place several in a row);
+  // text is one-shot (single edit per invocation). Each shares the
+  // useMark factory; specs differ only in build geometry, color
+  // resolution, and phase treatment. Design doc §7, §8.
+  const sharedMarkOpts = {
+    canvas: maybeCanvas,
+    tool,
+    setTool,
+    activeOperator,
+    activeOperatorId,
+    phase,
+    lastArrowTipRef,
+    undo: undoApi,
+  };
+  const { onChoice: setEngagementX } = useMark(
+    ENGAGEMENT_X_SPEC,
+    sharedMarkOpts,
+  );
+  const { onChoice: setSoundPing } = useMark(SOUND_PING_SPEC, sharedMarkOpts);
+  const { onChoice: setPositionDot } = useMark(
+    POSITION_DOT_SPEC,
+    sharedMarkOpts,
+  );
+  // Text alone needs the shortcut suspension ref so unmodified
+  // letter keys don't tear text mode down while the user is
+  // waiting to click. See useMark.ts text effect comment.
+  const { onChoice: setText } = useMark(TEXT_SPEC, {
+    ...sharedMarkOpts,
+    suspendedRef: shortcutsSuspended,
+  });
 
   const { onChoice: setEraser } = useEraser(
     maybeCanvas,
@@ -233,7 +371,69 @@ function App() {
   // FIXME: untie zoom tool from brush
   useZoom(maybeCanvas, brushWidth);
 
-  const { onUndo } = useUndo(maybeCanvas, unerasable);
+  // Register all mark specs into the central registry exactly
+  // once (module-level run via lazy useEffect with empty deps —
+  // registerMark is idempotent per the registry header). useUndo's
+  // modify-action path (§4.10) and registerControls below both
+  // look specs up via getSpecByMarkType; without this registration
+  // step those lookups return null and direct-manipulation +
+  // modify-undo silently break.
+  useEffect(() => {
+    registerMark(SIGHTLINE_SPEC);
+    registerMark(CONE_SPEC);
+    registerMark(ENGAGEMENT_X_SPEC);
+    registerMark(SOUND_PING_SPEC);
+    registerMark(POSITION_DOT_SPEC);
+    registerMark(TEXT_SPEC);
+  }, []);
+
+  // Direct-manipulation handles for sightlines and cones (Slice K).
+  // The hook subscribes to selection:created/updated and installs
+  // per-MarkType `fabric.Control` instances onto the selected
+  // object via spec.buildControls. Returns a cleanup that
+  // unsubscribes on canvas unmount.
+  useEffect(() => registerControls(maybeCanvas), [maybeCanvas]);
+
+  // === Chain-anchor recomputer ===
+  //
+  // Keep `lastArrowTipRef` in sync with canvas truth: walk objects
+  // in reverse, find the most-recent arrow, read its `__arrowTip`.
+  // Subscribed to both add and remove so undo and eraser update
+  // the anchor automatically — drawing a sightline after undoing
+  // the last arrow correctly anchors at the now-most-recent arrow
+  // (or soft-fails if there isn't one).
+  //
+  // Walk is O(canvas-objects). At expected sizes (hundreds of marks
+  // max in a single debrief) the cost is negligible per event.
+  useEffect(() => {
+    if (!maybeCanvas) return;
+    const canvas = maybeCanvas;
+    const recompute = () => {
+      const objs = canvas.getObjects();
+      for (let i = objs.length - 1; i >= 0; i--) {
+        const o = objs[i];
+        if (o === undefined) continue;
+        if (readMarkType(o) !== "arrow") continue;
+        const tip = readArrowTip(o);
+        if (tip !== null) {
+          lastArrowTipRef.current = tip;
+          return;
+        }
+      }
+      // No arrows left on the canvas — clear the anchor so the
+      // next sightline / cone activation correctly soft-fails.
+      lastArrowTipRef.current = null;
+    };
+    canvas.on("object:added", recompute);
+    canvas.on("object:removed", recompute);
+    // Also recompute once on mount in case the canvas already has
+    // arrows (e.g., a future "restore from save" flow).
+    recompute();
+    return () => {
+      canvas.off("object:added", recompute);
+      canvas.off("object:removed", recompute);
+    };
+  }, [maybeCanvas]);
 
   // === Brush color follows active operator ===
   //
@@ -246,6 +446,26 @@ function App() {
     if (!maybeCanvas?.freeDrawingBrush) return;
     maybeCanvas.freeDrawingBrush.color = activeOperator?.color ?? PENCIL_COLOR;
   }, [maybeCanvas, activeOperator?.color]);
+
+  // === Brush arrowhead flag follows tool ===
+  //
+  // Drives the LIVE arrowhead preview. The OutlinedPencilBrush
+  // renders a filled triangle at the end of the captured stroke
+  // when its `arrowhead` flag is true. We flip it on/off whenever
+  // the active tool changes between arrow and anything else. The
+  // committed-arrow path:created postprocess (appendArrowhead in
+  // tools/arrow.ts) handles the final mark; this flag keeps the
+  // live preview consistent with the eventual commit.
+  useEffect(() => {
+    if (!maybeCanvas?.freeDrawingBrush) return;
+    // The brush is an OutlinedPencilBrush — cast through unknown
+    // to access the subclass-specific flag without importing the
+    // class here (we already have it as an instance).
+    const brush = maybeCanvas.freeDrawingBrush as unknown as {
+      arrowhead?: boolean;
+    };
+    brush.arrowhead = tool.type === ToolType.arrow;
+  }, [maybeCanvas, tool.type]);
 
   // === Brush strokeDashArray follows phase ===
   //
@@ -365,10 +585,17 @@ function App() {
   // the array does NOT re-install the window listener — see
   // useKeyboardShortcuts.ts note 1.
   //
-  // Suspension ref is owned here and read by the marker radial
-  // (MarkerRadial sets it to true on mount, false on dismiss).
-  const shortcutsSuspended = useRef<boolean>(false) as SuspensionRef;
+  // (shortcutsSuspended is declared earlier, near lastArrowTipRef
+  // — see the block above the operator state. It needs to be in
+  // scope by the time useMark(TEXT_SPEC, …) runs so the text
+  // effect can suspend tool-switching letter bindings while
+  // waiting for the user's first click.)
   const previousToolRef = useRef<Tool | null>(null);
+  // Hotkeys reference overlay (`?` to open). Excalidraw-style modal
+  // sheet listing every shortcut. The overlay self-manages
+  // suspension + focus on mount, paralleling the MarkerRadial
+  // pattern; here we just gate visibility.
+  const [hotkeysOpen, setHotkeysOpen] = useState<boolean>(false);
 
   // Space-hold pan: flip tool to pan on enter, restore on exit.
   // usePan picks up tool.type === 'pan' via its second activation
@@ -441,6 +668,30 @@ function App() {
         onPress: () =>
           setPhase((cur) => (cur === "plan" ? "record" : "plan")),
       },
+      // P1 vocabulary keys (design doc §9.2). Arrow + the point
+      // marks (X, I, D) are sticky; sightline, cone, and text are
+      // one-shot (the revert happens inside useMark on commit, not
+      // via the binding).
+      { kind: "press", key: "a", onPress: setArrow },
+      { kind: "press", key: "s", onPress: setSightline },
+      { kind: "press", key: "o", onPress: setCone },
+      { kind: "press", key: "x", onPress: setEngagementX },
+      { kind: "press", key: "i", onPress: setSoundPing },
+      { kind: "press", key: "d", onPress: setPositionDot },
+      { kind: "press", key: "t", onPress: setText },
+      // ? opens the hotkeys reference overlay. Browsers expose
+      // Shift+/ as `key = "?"` on US layouts, so we bind to `?`
+      // with an explicit `shift` modifier — the modifier-strict
+      // matcher in useKeyboardShortcuts requires every wanted
+      // modifier to be present AND every unwanted modifier to be
+      // absent, so this catches the literal `?` press without
+      // accidentally firing on raw `/` or Ctrl+Shift+/.
+      {
+        kind: "press",
+        key: "?",
+        modifiers: ["shift"],
+        onPress: () => setHotkeysOpen(true),
+      },
       // Space-hold pan.
       { kind: "hold", key: " ", onEnter: enterPan, onExit: exitPan },
       // Right-mouse-hold eraser.
@@ -455,6 +706,13 @@ function App() {
       setSelect,
       setPencil,
       setEraser,
+      setArrow,
+      setSightline,
+      setCone,
+      setEngagementX,
+      setSoundPing,
+      setPositionDot,
+      setText,
       onUndo,
       openRadial,
       enterPan,
@@ -551,6 +809,10 @@ function App() {
     // Reset the unerasable allowlist; without this, switching maps would
     // leave the previous map's image src registered, leaking across maps.
     unerasable.clear();
+    // Same lifecycle: drop the chain anchor so a sightline started
+    // on map-A doesn't try to anchor at coordinates that mean
+    // something different on map-B.
+    lastArrowTipRef.current = null;
 
     fabric.Image.fromURL(maps[map]).then((image) => {
       image.canvas = canvas;
@@ -694,6 +956,11 @@ function App() {
           suspendedRef={shortcutsSuspended}
         />
       )}
+      <HotkeysOverlay
+        open={hotkeysOpen}
+        onClose={() => setHotkeysOpen(false)}
+        suspendedRef={shortcutsSuspended}
+      />
     </div>
   );
 }

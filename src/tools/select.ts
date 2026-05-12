@@ -20,6 +20,22 @@ export const useSelect = (
     return () => {
       canvas.selection = false;
       canvas.perPixelTargetFind = true;
+      // CRITICAL: discard the active object. fabric retains
+      // `activeObject` across tool switches; if we leave it set,
+      // the next tool's click on the still-selected object's
+      // hitbox is interpreted by fabric as "drag the active
+      // object" rather than reaching the new tool's mouse:down
+      // handler. Symptom users see: "stuck in selection" — after
+      // V → click → B (or any other non-select tool), drawing
+      // doesn't start because clicking on the previously-selected
+      // mark just drags it.
+      //
+      // discardActiveObject also fires selection:cleared, which
+      // tells Slice K's controls.ts to take down the active-
+      // object's custom handles. requestRenderAll redraws the
+      // canvas without the selection bounding box.
+      canvas.discardActiveObject();
+      canvas.requestRenderAll();
     };
   }, [canvas, tool.type]);
 

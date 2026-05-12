@@ -25,6 +25,12 @@ export interface MockCanvas {
   requestRenderAll: ReturnType<typeof vi.fn>;
   getZoom: ReturnType<typeof vi.fn>;
   zoomToPoint: ReturnType<typeof vi.fn>;
+  // Selection lifecycle — useSelect's cleanup discards the active
+  // object when leaving select mode (P1 stuck-in-selection fix; see
+  // select.ts).
+  discardActiveObject: ReturnType<typeof vi.fn>;
+  setActiveObject: ReturnType<typeof vi.fn>;
+  getActiveObject: ReturnType<typeof vi.fn>;
   freeDrawingBrush: { color: string; width: number };
   isDrawingMode: boolean;
   defaultCursor: string;
@@ -56,6 +62,9 @@ export function createMockCanvas(): MockCanvas {
     requestRenderAll: vi.fn(),
     getZoom: vi.fn(() => 1),
     zoomToPoint: vi.fn(),
+    discardActiveObject: vi.fn(),
+    setActiveObject: vi.fn(),
+    getActiveObject: vi.fn(() => null),
     freeDrawingBrush: { color: "#000", width: 5 },
     isDrawingMode: true,
     defaultCursor: "auto",

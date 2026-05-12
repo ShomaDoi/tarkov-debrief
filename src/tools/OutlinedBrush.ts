@@ -33,6 +33,11 @@
 
 import * as fabric from "fabric";
 import type { Canvas } from "fabric";
+import {
+  arrowheadVertices,
+  tangentFromPoints,
+  TANGENT_SAMPLE_COUNT,
+} from "./freehand/arrowhead";
 
 // Default outline appearance. Tune by changing these constants
 // (single source of truth — applies to both live and finalized).
@@ -88,6 +93,19 @@ export class OutlinedPath extends fabric.Path {
 export class OutlinedPencilBrush extends fabric.PencilBrush {
   outlineColor: string = DEFAULT_OUTLINE_COLOR;
   outlineRatio: number = DEFAULT_OUTLINE_RATIO;
+  /**
+   * When true, the live preview renders an arrowhead at the end of
+   * the captured stroke (a filled triangle, sized via the same
+   * `arrowheadVertices` math the finalized arrow uses — so live and
+   * finalized read identically). Set externally by App.tsx based on
+   * the active tool: arrow → true, pencil → false. Defaults to
+   * false so legacy callers (pencil-only) are unaffected.
+   *
+   * P1 §5.1 ships this flag for the "arrowhead visible during
+   * drawing" requirement that the static `appendArrowhead`
+   * postprocess (which only runs after release) can't satisfy.
+   */
+  arrowhead: boolean = false;
 
   constructor(canvas: Canvas) {
     super(canvas);
@@ -125,6 +143,93 @@ export class OutlinedPencilBrush extends fabric.PencilBrush {
     this.width = origWidth;
     this.strokeDashArray = origDash;
     super._render(ctx);
+
+    if (this.arrowhead) {
+      this._renderLiveArrowhead(ctx, origColor, origWidth);
+    }
+  }
+
+  /**
+   * Draw a filled-triangle arrowhead at the end of the currently
+   * captured points. Called from `_render` only when `arrowhead`
+   * is true; sized and positioned via the same math the finalized
+   * arrowhead uses (`arrowheadVertices`), so the live preview and
+   * the committed mark look identical.
+   *
+   * Tangent comes from the last two points (a chord, not a curve
+   * derivative — fabric's brush stores raw points before
+   * Q-smoothing, so a chord is the right tangent approximation
+   * for live preview).
+   *
+   * IMPORTANT: fabric's BaseBrush wraps each pass of `super._render`
+   * in a save / `_saveAndTransform` / draw / restore cycle. By the
+   * time `super._render(ctx)` returns, the ctx has been restored
+   * out of scene-coord space and is back in screen-pixel space.
+   * Drawing in scene coords without re-applying the viewport
+   * transform leaves the arrowhead floating off in the corner
+   * (the bug the user reported as "detached"). We replicate
+   * fabric's transform here.
+   */
+  private _renderLiveArrowhead(
+    ctx: CanvasRenderingContext2D,
+    color: string,
+    strokeWidth: number,
+  ): void {
+    // `_points` is fabric's captured-pointer array. We need at
+    // least two points to compute a tangent direction.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const points = (this as any)._points as
+      | Array<{ x: number; y: number }>
+      | undefined;
+    if (!points || points.length < 2) return;
+    const last = points[points.length - 1]!;
+    // Average the tangent over the last TANGENT_SAMPLE_COUNT+1
+    // captured points (matching the committed-arrow path's
+    // smoothing). Single-segment tangent was too twitchy — every
+    // mouse-move noise tick snapped the arrowhead's orientation
+    // to the latest segment, which the user perceives as jitter.
+    // tangentFromPoints skips collapsed adjacent points internally
+    // and returns the fallback if no usable chord exists.
+    const tailLen = Math.min(points.length, TANGENT_SAMPLE_COUNT + 1);
+    const tail = points.slice(points.length - tailLen);
+    const tangent = tangentFromPoints(tail);
+    const [tip, l, r] = arrowheadVertices(
+      { x: last.x, y: last.y },
+      tangent,
+      strokeWidth,
+    );
+    // Apply the canvas viewport transform so scene-coord vertices
+    // land at the right screen pixels. ctx is otherwise in screen
+    // space at this point (fabric's super._render restored it).
+    const v = this.canvas.viewportTransform;
+    ctx.save();
+    ctx.transform(v[0], v[1], v[2], v[3], v[4], v[5]);
+    // Chevron shape: two strokes from tip → left and tip → right
+    // (matches the committed `buildArrowhead` `OutlinedPath`
+    // which uses path-data `M tip L left M tip L right`). Each
+    // arm is drawn twice — wider black outline first, then the
+    // user-colored stroke on top — mirroring the line body's
+    // two-pass outline so the chevron reads as continuous with
+    // the line.
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const drawArms = () => {
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(l.x, l.y);
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(r.x, r.y);
+      ctx.stroke();
+    };
+    // Outline pass.
+    ctx.strokeStyle = this.outlineColor;
+    ctx.lineWidth = strokeWidth * (1 + 2 * this.outlineRatio);
+    drawArms();
+    // User-color pass on top.
+    ctx.strokeStyle = color;
+    ctx.lineWidth = strokeWidth;
+    drawArms();
+    ctx.restore();
   }
 
   // Have the brush emit OutlinedPath instances instead of plain

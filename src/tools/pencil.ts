@@ -1,52 +1,76 @@
 // Pencil tool with stroke-metadata tagging.
 //
-// Refactored in Phase 4: gains ref-mirrored access to the currently
-// active operator and phase. We can't read them as plain props
-// inside the fabric `path:created` handler because that handler
-// outlives React renders — by the time it runs, the captured
-// `activeOperatorId`/`phase` may be stale. The ref-mirror pattern
-// (canonical example: src/tools/pan.ts toolRef/setToolRef) keeps
-// the handler reading the live values.
+// As of P1, the brush + path:created + tagging lifecycle is shared
+// with the new arrow tool via the `useFreehand` factory
+// (src/tools/freehand/useFreehand.ts). usePencil is now a thin
+// wrapper that supplies a no-postprocess spec and adds the pencil-
+// specific color-picker handler (`onColorChoice`).
 //
-// What gets attached:
-//   - operatorId: tag for filtering / visibility (see §5.6)
-//   - phase: "plan" or "record"; plan-phase strokes additionally
-//     get a strokeDashArray applied post-creation
+// What stays here vs. moves to useFreehand:
+//   - Lifecycle (brush mode, path:created listener, metadata tag):
+//     useFreehand.
+//   - Ref-mirror for operator + phase: useFreehand.
+//   - onColorChoice (react-color integration): here. Pencil is the
+//     only freehand tool with a freeform palette picker; arrow's
+//     color is driven by the active operator.
+//
+// What this file does NOT do:
+//   - Apply strokeDashArray. That's done on the BRUSH itself via the
+//     "Brush strokeDashArray follows phase" effect in src/App.tsx;
+//     fabric's PencilBrush.createPath copies brush.strokeDashArray
+//     onto the finalized Path. This keeps the live preview in sync
+//     with the finalized stroke — single source of truth.
 //
 // Design references:
-//   - claudedocs/design_p0_slice.md §5.4 (where metadata is
-//     attached — path:created not object:added)
-//   - claudedocs/design_p0_slice.md §6.3 (dashArray behavior)
+//   - claudedocs/design_p0_slice.md §5.4 (where metadata is attached)
+//   - claudedocs/design_p1_slice.md §5.1 (useFreehand factory)
+//   - claudedocs/design_p1_slice.md §15.1 R-G (refactor decision)
 
 import * as fabric from "fabric";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import { ColorResult } from "react-color";
 import { Tool, ToolType, SetToolFn } from "./tool";
-import { tagObject } from "./metadata";
+import { useFreehand, type FreehandSpec } from "./freehand/useFreehand";
 import type { OperatorId } from "@/state/operators";
 import type { Phase } from "@/state/phase";
+import type { UndoApi } from "./undo";
+
+// The pencil's freehand spec is a degenerate one: no markType (legacy
+// P0 strokes carry no markType, and we preserve that), no
+// onPathCreated postprocess.
+const PENCIL_SPEC: FreehandSpec = {
+  toolType: ToolType.pencil,
+};
 
 export const usePencil = (
   canvas: fabric.Canvas | null,
   setTool: SetToolFn,
   tool: Tool,
   setColor: (color: string) => void,
-  // Phase 4 additions. Defaults make the hook backward-compatible
-  // for the (transient) period before App.tsx threads them in.
+  // Defaulted for backward-compat with any caller that hasn't been
+  // updated to thread operators/phase. App.tsx threads them all.
   activeOperatorId: OperatorId | null = null,
   phase: Phase = "record",
+  // P1 addition. Pencil itself doesn't consume the undo API, but the
+  // FreehandSpec interface offers it to postprocesses; we pass null
+  // here since pencil has no postprocess.
+  undoApi: UndoApi | null = null,
 ) => {
-  // Ref-mirror so the path:created handler reads live values, not
-  // a stale closure captured at effect-mount time.
-  const operatorRef = useRef<OperatorId | null>(activeOperatorId);
-  const phaseRef = useRef<Phase>(phase);
-  operatorRef.current = activeOperatorId;
-  phaseRef.current = phase;
+  const { onChoice } = useFreehand(
+    canvas,
+    setTool,
+    tool,
+    PENCIL_SPEC,
+    activeOperatorId,
+    phase,
+    undoApi,
+  );
 
-  const onChoice = useCallback(() => {
-    setTool({ ...tool, type: ToolType.pencil, cursor: null });
-  }, [setTool, tool]);
-
+  // Pencil-specific: legacy react-color picker integration. Mutates
+  // both the App-level color state AND the brush color directly —
+  // duplicate with the App.tsx-level "brush color follows operator"
+  // effect, but harmless (last write wins). Preserved from P0 to
+  // avoid changing the picker's behavior in P1.
   const onColorChoice = useCallback(
     (color: ColorResult) => {
       setColor(color.hex);
@@ -56,37 +80,6 @@ export const usePencil = (
     },
     [canvas, setColor],
   );
-
-  useEffect(() => {
-    if (!canvas || tool.type !== ToolType.pencil) return;
-
-    canvas.isDrawingMode = true;
-
-    // Tag freshly-created paths with the current operator + phase.
-    // We use fabric's `path:created` (fires once per completed
-    // stroke) rather than `object:added` because we want to mutate
-    // the path before any other listener sees it — see design doc
-    // §5.4. The `object:added` listener in useUndo runs AFTER this
-    // and reads the path as-tagged, which is correct.
-    //
-    // Note: strokeDashArray is intentionally NOT applied here.
-    // It's set on the brush itself by the "Brush strokeDashArray
-    // follows phase" effect in src/App.tsx, and fabric's
-    // PencilBrush.createPath copies brush.strokeDashArray onto the
-    // finalized Path automatically (PencilBrush.ts line 231). This
-    // keeps the live preview in sync with the finalized stroke
-    // (both come from a single source of truth — the brush
-    // setting).
-    const onPathCreated = (opt: { path: fabric.FabricObject }) => {
-      tagObject(opt.path, operatorRef.current, phaseRef.current);
-    };
-    canvas.on("path:created", onPathCreated);
-
-    return () => {
-      canvas.isDrawingMode = false;
-      canvas.off("path:created", onPathCreated);
-    };
-  }, [canvas, tool.type]);
 
   return { onChoice, onColorChoice };
 };

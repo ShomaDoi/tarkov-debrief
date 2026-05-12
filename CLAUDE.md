@@ -90,6 +90,113 @@ elsewhere, read the rationale before re-enabling.
   fabric-v7 center-origin regression — preserve that assertion
   verbatim when modifying it.
 
+## Adding a new tool or mark — touchpoint checklist
+
+Tools and marks have a *lot* of integration surface. Easy to add
+the implementation and forget some of the discoverability /
+persistence / undo plumbing. Use this checklist whenever a new
+tool (V/B/E/M/A/S/O/X/I/D/T-class binding) or a new tactical mark
+ships, and update the checklist when you discover a new
+touchpoint a future addition would need.
+
+### Always
+
+- **`src/tools/tool.ts`** — add the new value to the `ToolType`
+  enum.
+- **`src/state/tool.ts`** — if the tool is one-shot / transient
+  (auto-reverts after a single commit, like sightline / cone /
+  text), add it to `TRANSIENT_TOOLS` so persistence falls back
+  to `pencil` on reload instead of restoring a tool whose anchor
+  / edit-session is gone.
+- **`src/App.tsx`** — five distinct edits:
+  1. Import the tool's hook (`useArrow`, `useMark(SPEC)`, …).
+  2. Instantiate it; grab its `onChoice` setter.
+  3. Add a `Binding` entry in the `bindings` `useMemo` array,
+     and add the new `onChoice` to the array's deps.
+  4. If it's a continuous-capture tool that uses the freehand
+     brush, wire any brush effects that depend on the active
+     tool (see existing "brush.arrowhead follows tool" effect
+     as a template).
+  5. If it should appear in the toolbar, add the icon button JSX
+     and wire its `onClick`.
+- **`src/components/HotkeysOverlay.tsx`** — add a row to the
+  appropriate `SECTIONS` entry so the binding shows up in the `?`
+  reference overlay. Tests in `HotkeysOverlay.test.tsx` enforce
+  that every P1 tactical-mark key has a kbd pill — if you add a
+  mark binding, extend that assertion list.
+
+### When the tool produces a fabric object that should integrate with the rest of the canvas
+
+- **`src/tools/metadata.ts`** — add a literal to the `MarkType`
+  union and to the validation `switch` in `readMarkType`.
+- **`useUndo` integration** — the new mark's `canvas.add` already
+  flows through `useUndo`'s `object:added` listener for free
+  (undo of an add = remove from canvas). If the mark supports
+  direct-manipulation handle edits, also implement
+  `serialize` / `deserialize` on its `MarkSpec` so the
+  `object:modified` → modify-action path (`useUndo` §4.10) can
+  roll back handle edits.
+- **`useEraser` integration** — generic; works on any fabric
+  object as long as it's `evented: true`. No code change needed
+  unless the mark needs to be unerasable (then add it to the
+  `unerasable` set in App.tsx, alongside the map image).
+- **Operator visibility** — if the mark carries operator metadata
+  (most do — see `tagObject` in `metadata.ts`), the existing
+  per-operator visibility effect in App.tsx will toggle it
+  automatically. No new wiring.
+
+### When the tool is a discrete-gesture `MarkSpec` (the common case for new tactical marks)
+
+- **`src/tools/marks/{name}.ts`** — define and export `{NAME}_SPEC`
+  (typed `MarkSpec`) with `build`, `applyPhase`, plus
+  optional `serialize` / `deserialize` (for modify-undo) and
+  `buildControls` (for Slice K direct-manipulation handles).
+- **`src/App.tsx`** — register the spec in the central
+  `registerMark(...)` effect; without this `useUndo`'s modify
+  lookup and `registerControls` both fail silently because
+  `getSpecByMarkType` returns null.
+- **`src/tools/marks/useMark.ts`** — if the new mark needs an
+  interaction kind that doesn't exist yet (`chained-click`,
+  `chained-drag`, `point`, `text`), extend `MarkInteraction` in
+  `types.ts` and add the corresponding `useEffect` lifecycle
+  here. Use the existing chained-click effect as a template
+  (note the `previousAtActivation` snapshot pattern).
+- **Tests** — add `{name}.test.ts` covering the spec contract
+  (build / applyPhase round-trip) and, if the spec has it,
+  serialize/deserialize round-trip + the interaction lifecycle
+  (soft-fail when no anchor, commit flow, click-cancel, Esc).
+
+### When the tool is a continuous-capture freehand tool (pencil / arrow / future siblings)
+
+- Wraps `useFreehand` from `src/tools/freehand/useFreehand.ts` —
+  see `src/tools/arrow.ts` for the canonical example with
+  postprocess (`appendArrowhead`).
+- If the postprocess does a path → group swap (or any other
+  multi-step canvas mutation that fabric would otherwise record
+  as multiple undo actions), use the `useUndo` API
+  (`popLastAction`, `markTransient`, `recordAdd`) to keep the
+  undo stack at exactly one entry per user action. See arrow's
+  step-8 comment for the contract.
+
+### When the tool chains off the most-recent arrow tip
+
+- The chain anchor is `lastArrowTipRef` in App.tsx, populated by
+  a canvas-walk effect that subscribes to `object:added` /
+  `object:removed` and reads each arrow group's `__arrowTip`.
+  Reading the ref is enough; the recompute keeps it in sync
+  through undo and eraser automatically.
+- The arrow tool tags `__arrowTip` on commit via `tagArrowTip`
+  in `metadata.ts` — don't read fabric path internals; use the
+  helper.
+
+### Last check
+
+- `pnpm typecheck && pnpm lint && pnpm test` before committing;
+  `pnpm test:e2e` before merging.
+- Press `?` in the live app and visually confirm the new
+  binding appears in the overlay. Tests would catch a missing
+  section, but a visual check confirms the row formatting.
+
 ## Commit/PR norms
 
 - Conventional commit subjects (e.g., `feat: …`, `fix: …`).
