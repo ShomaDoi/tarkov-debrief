@@ -108,6 +108,19 @@ function appendArrowhead(
 
   ctx.canvas.remove(path);
 
+  // P2: tag the body and head with __role so the replay animator
+  // (src/tools/marks/animators.ts) can identify them without
+  // relying on the children-array order. Cheap forward-compat: if
+  // arrow ever grows a third child (a label, a hover dot, …) the
+  // animator still picks the right one. Pattern matches the
+  // existing __operatorId / __phase / __markType custom-property
+  // tagging convention; the type-cast through `any` is the same
+  // shape eslint.config.js permits for fabric integration.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (path as any).__role = "body";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (arrowhead as any).__role = "head";
+
   // Now construct the group from path + arrowhead. fabric.Group
   // re-parents the children and computes its own bounding box.
   // We attach metadata to the group (not to its children) so

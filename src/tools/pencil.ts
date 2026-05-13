@@ -35,11 +35,16 @@ import type { OperatorId } from "@/state/operators";
 import type { Phase } from "@/state/phase";
 import type { UndoApi } from "./undo";
 
-// The pencil's freehand spec is a degenerate one: no markType (legacy
-// P0 strokes carry no markType, and we preserve that), no
-// onPathCreated postprocess.
+// The pencil's freehand spec carries markType "pencil" (added in
+// P2 so the replay animator dispatch in src/tools/marks/animators.ts
+// can route pencil strokes to pathReveal). Pre-P2 strokes have no
+// markType and read back as null — animator dispatch no-ops for
+// them and they instant-appear in replay.
+// No onPathCreated postprocess; pencil's lifecycle ends at the
+// freehand path:created event.
 const PENCIL_SPEC: FreehandSpec = {
   toolType: ToolType.pencil,
+  markType: "pencil",
 };
 
 export const usePencil = (

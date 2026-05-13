@@ -128,7 +128,10 @@ touchpoint a future addition would need.
 ### When the tool produces a fabric object that should integrate with the rest of the canvas
 
 - **`src/tools/metadata.ts`** — add a literal to the `MarkType`
-  union and to the validation `switch` in `readMarkType`.
+  union and to the validation `switch` in `readMarkType`. The
+  `__id` and `__seq` fields are written by `tagObject` for free
+  — no per-mark wiring needed. `tagObject` is idempotent on
+  re-call, so it's safe to invoke from any number of code paths.
 - **`useUndo` integration** — the new mark's `canvas.add` already
   flows through `useUndo`'s `object:added` listener for free
   (undo of an add = remove from canvas). If the mark supports
@@ -144,6 +147,25 @@ touchpoint a future addition would need.
   (most do — see `tagObject` in `metadata.ts`), the existing
   per-operator visibility effect in App.tsx will toggle it
   automatically. No new wiring.
+- **Replay timeline (P2)** — `tagObject` writes `__id` + `__seq`
+  on every fabric object it touches, so any new mark inherits
+  timeline participation for free. The replay scrubber will pick
+  the mark up via its `object:added` subscriber and slot it into
+  the projection (`src/state/timeline.ts`) at the next tick.
+  - **Animation defaults to instant-appear.** That's correct for
+    most marks (engagement X, sound ping, position dot, text,
+    sightline today). If the mark has intrinsic temporal
+    structure that's worth animating in replay (think: cone
+    sweep, path reveal), add an entry to `ANIMATORS` in
+    `src/tools/marks/animators.ts` keyed by its `MarkType`.
+    See the `pathReveal` / `coneSweep` implementations for the
+    `applyAnimation(obj, t)` contract (`t ∈ [0,1]`,
+    geometry-agnostic mutation, `t = 1` restores fully).
+  - **Per-mark animation duration.** Edit `animDurationFor` in
+    `src/state/timeline.ts` so the projection knows how long the
+    new mark takes to play back. Path-style marks use the cached
+    arc length + `drawSpeedPxPerSec`; fixed-duration animations
+    pull a constant from `ANIMATION_CONFIG`.
 
 ### When the tool is a discrete-gesture `MarkSpec` (the common case for new tactical marks)
 

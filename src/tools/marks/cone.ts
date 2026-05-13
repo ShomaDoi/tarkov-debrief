@@ -318,7 +318,7 @@ function deserialize(
  * on `parsePath`'s output — but at one allocation per cone commit
  * or per cone preview frame, the cost is negligible.
  */
-function parsePath(d: string): unknown[] {
+export function parsePath(d: string): unknown[] {
   const tmp = new fabric.Path(d);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (tmp as any).path as unknown[];

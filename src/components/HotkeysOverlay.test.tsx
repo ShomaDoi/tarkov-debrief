@@ -50,6 +50,20 @@ describe("HotkeysOverlay", () => {
     expect(screen.getByText(/^Other$/i)).toBeInTheDocument();
   });
 
+  it("documents the P2 Shift+Space replay binding", () => {
+    // Periodic-drift safeguard: if the design or wiring of the
+    // replay scrubber changes (e.g. a different modifier or a new
+    // key), this test flags the overlay row going stale. The
+    // useKeyboardShortcuts binding in App.tsx is the source of
+    // truth; the overlay must match.
+    render(
+      <HotkeysOverlay open onClose={vi.fn()} suspendedRef={suspended} />,
+    );
+    // The kbd pill renders the literal string "Shift + Space".
+    const pill = screen.getByText(/Shift \+ Space/i, { selector: "kbd" });
+    expect(pill).toBeInTheDocument();
+  });
+
   it("lists each P1 tactical-mark binding (A, S, O, X, I, D, T)", () => {
     // The overlay is the user-visible reference for these keys.
     // If a binding ships in App.tsx but isn't reflected here, the

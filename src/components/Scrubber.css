@@ -1,0 +1,133 @@
+/* Replay scrubber — overlaid at the bottom of the canvas viewport.
+ *
+ * Position absolute on .Canvas (in App.tsx); pointer-events on so
+ * clicks land on the scrubber rather than the canvas underneath.
+ * Width is constrained so it doesn't span the entire viewport on
+ * ultrawide screens; centered via translateX(-50%).
+ *
+ * Visual register echoes the header toolbar (dark translucent
+ * background, light text, subtle borders) so it reads as part of
+ * the app chrome rather than canvas content.
+ */
+
+.Scrubber {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(20, 20, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  user-select: none;
+  z-index: 100;
+  width: clamp(360px, 60vw, 720px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.Scrubber-playPause {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e0e0e0;
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  cursor: pointer;
+  font-size: 12px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+.Scrubber-playPause:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.Scrubber-playPause:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.Scrubber-track {
+  flex: 1 1 auto;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+  /* 12px clickable padding above/below makes mouse-down ergonomic
+   * without inflating the visual height. */
+  margin: 6px 0;
+}
+
+.Scrubber-track-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(120, 160, 220, 0.5);
+  border-radius: 4px 0 0 4px;
+  pointer-events: none;
+}
+
+.Scrubber-playhead {
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 16px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  transform: translateX(-2px);
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.Scrubber-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0.85;
+  min-width: 76px;
+  text-align: right;
+}
+
+.Scrubber-live,
+.Scrubber-speed {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e0e0e0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  flex: 0 0 auto;
+  font-family: inherit;
+  line-height: 1.2;
+}
+.Scrubber-live:hover,
+.Scrubber-speed:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.Scrubber-live--active {
+  background: rgba(100, 200, 100, 0.22);
+  border-color: rgba(100, 200, 100, 0.5);
+}
+
+.Scrubber-speed--active {
+  background: rgba(120, 160, 220, 0.22);
+  border-color: rgba(120, 160, 220, 0.55);
+}
+
+.Scrubber-speeds {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}

@@ -76,6 +76,7 @@ const SECTIONS: HotkeySection[] = [
       { keys: "Space (drag)", label: "Pan" },
       { keys: "Middle mouse (drag)", label: "Pan" },
       { keys: "Right mouse (drag)", label: "Eraser" },
+      { keys: "Shift + Space", label: "Play/pause replay" },
       { keys: "?", label: "This overlay" },
       { keys: "Esc", label: "Close (radial, overlay, gestures)" },
     ],

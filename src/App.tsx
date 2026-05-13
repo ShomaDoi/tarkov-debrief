@@ -56,11 +56,15 @@ import {
 } from "./state/operators";
 import { loadPhase, savePhase, type Phase } from "./state/phase";
 import { loadTool, saveTool, isTransientTool } from "./state/tool";
+import { useTimeline } from "./state/timeline";
+import { applyAnimation, resetAnimation } from "./tools/marks/animators";
 import {
+  readId,
   readMarkType,
   readOperator,
   readArrowTip,
 } from "./tools/metadata";
+import { Scrubber } from "./components/Scrubber";
 import { OperatorChips } from "./components/OperatorChips";
 import { PhaseToggle } from "./components/PhaseToggle";
 import {
@@ -250,6 +254,21 @@ function App() {
   // notably useArrow's path→group swap (design doc §5.1 step 8).
   const undoApi = useUndo(maybeCanvas, unerasable);
   const { onUndo } = undoApi;
+
+  // P2: replay timeline. Subscribes to object:added/:removed and
+  // owns the playhead + speed + play/pause state. Consumed by the
+  // render-composition effect below (combined operator-visibility
+  // + playhead-animation walk) and by <Scrubber /> in the JSX.
+  // See claudedocs/design_p2_slice.md §5 and src/state/timeline.ts.
+  const timeline = useTimeline(maybeCanvas);
+  // Ref-mirror so the Shift+Space binding action reads the live
+  // isPlaying state without re-creating the bindings array every
+  // render (the bindings useMemo deps stay focused on tool-hook
+  // setters, not on changing timeline state). Same pattern as
+  // operatorRef / phaseRef in useFreehand and lastCursorRef
+  // elsewhere in App.tsx.
+  const timelineRef = useRef(timeline);
+  timelineRef.current = timeline;
 
   const { onChoice: setSelect } = useSelect(maybeCanvas, setTool, tool);
 
@@ -485,29 +504,115 @@ function App() {
       phase === "plan" ? dashArrayForZoom(maybeCanvas.getZoom()) : null;
   }, [maybeCanvas, phase]);
 
-  // === Operator visibility application ===
+  // === Render composition: operator visibility + replay playhead ===
   //
-  // When an operator is hidden, iterate the canvas's objects and
-  // toggle `visible` on any object whose metadata `operatorId`
-  // matches. Objects with no operator tag (legacy strokes from
-  // before this slice shipped, or strokes drawn with no active
-  // operator) stay visible always — the "legacy strokes are
-  // everyone's strokes" semantic from §5.6.
+  // Unified single canvas-walk that ANDs two visibility filters and
+  // dispatches per-mark animators for marks currently mid-animation.
+  // Replaces the standalone operator-visibility effect from P0/P1
+  // — design_p2_slice.md §7 explains why combining matters
+  // (ordering bugs if two effects both write obj.visible).
   //
-  // We re-run on every operators change. That's O(objects) per
-  // change, which is fine for the object counts a debrief produces.
+  // Visibility rule per object:
+  //   - Untagged (no __id): operator filter only. Map image lives
+  //     here and stays visible regardless of playhead.
+  //   - Playhead before slot start: hidden + animation reset.
+  //   - Playhead past slot end: visible iff operator visible +
+  //     animation reset (restores full geometry if a previous tick
+  //     left it partial).
+  //   - Mid-slot: visible iff operator visible; if visible, also
+  //     call applyAnimation with t in (0, 1).
+  //
+  // Walks O(objects) on every playhead tick (RAF rate during
+  // playback). At expected mark counts (< 200 per debrief) the
+  // cost is dominated by applyAnimation for the one or two marks
+  // currently mid-animation. See design §7.2.
   useEffect(() => {
     if (!maybeCanvas) return;
     const hidden = new Set(
       operators.filter((op) => !op.visible).map((op) => op.id),
     );
+    const slotsById = new Map(timeline.slots.map((s) => [s.id, s]));
+    // Logical-time projection of the playhead. The slot starts and
+    // durations are stored in logical time; the playhead lives in
+    // playback time. See timeline.ts §5.6 for why speed is applied
+    // at the boundary rather than baked into the projection.
+    const logicalPlayhead = timeline.playhead * timeline.speed;
+
     for (const obj of maybeCanvas.getObjects()) {
       const opId = readOperator(obj);
-      if (opId === null) continue; // untagged objects always visible
-      obj.visible = !hidden.has(opId);
+      const operatorVisible = opId === null || !hidden.has(opId);
+      const id = readId(obj);
+      const slot = id !== null ? slotsById.get(id) : undefined;
+
+      if (!slot) {
+        // Untagged objects (map image, anything without __id):
+        // operator filter is the only gate.
+        obj.visible = operatorVisible;
+        continue;
+      }
+
+      const slotEnd = slot.logicalSlotStart + slot.logicalAnimDuration;
+      if (logicalPlayhead < slot.logicalSlotStart) {
+        // Not yet in slot — hide and reset any animation cache so
+        // a subsequent re-entry rebuilds from current geometry.
+        obj.visible = false;
+        resetAnimation(obj);
+      } else if (logicalPlayhead >= slotEnd) {
+        // Past slot — visible per operator filter, fully rendered.
+        obj.visible = operatorVisible;
+        resetAnimation(obj);
+      } else {
+        // Mid-animation window.
+        obj.visible = operatorVisible;
+        if (operatorVisible) {
+          const t =
+            slot.logicalAnimDuration === 0
+              ? 1
+              : (logicalPlayhead - slot.logicalSlotStart) /
+                slot.logicalAnimDuration;
+          applyAnimation(obj, t);
+        }
+      }
     }
     maybeCanvas.requestRenderAll();
-  }, [maybeCanvas, operators]);
+  }, [
+    maybeCanvas,
+    operators,
+    timeline.slots,
+    timeline.playhead,
+    timeline.speed,
+  ]);
+
+  // === Drawing disabled during replay (R-H) ===
+  //
+  // When the playhead is not at live, prevent new strokes (the
+  // freehand brush is dead) and selection (skipTargetFind = true).
+  // On return to live, restore — including isDrawingMode if the
+  // active tool is one of the freehand variants (the tool hooks
+  // set isDrawingMode = true on their own effect mount, but that
+  // effect doesn't re-fire when isLive flips, so we re-establish
+  // here).
+  //
+  // Caveat: chained-mark tools (sightline, cone) whose mouse:down
+  // handlers run via canvas events will still fire if the user
+  // clicks the canvas while in those tools. The expected workflow
+  // is to finish annotating before scrubbing; the edge case is
+  // documented in §12.2 of the P2 design.
+  useEffect(() => {
+    if (!maybeCanvas) return;
+    if (!timeline.isLive) {
+      maybeCanvas.isDrawingMode = false;
+      maybeCanvas.skipTargetFind = true;
+    } else {
+      maybeCanvas.skipTargetFind = false;
+      if (
+        tool.type === ToolType.pencil ||
+        tool.type === ToolType.arrow
+      ) {
+        maybeCanvas.isDrawingMode = true;
+      }
+    }
+  }, [maybeCanvas, timeline.isLive, tool.type]);
 
   // === Marker radial state (Phase 5 of design_p0_slice.md) ===
   //
@@ -691,6 +796,24 @@ function App() {
         key: "?",
         modifiers: ["shift"],
         onPress: () => setHotkeysOpen(true),
+      },
+      // Shift+Space toggles replay play/pause. Plain Space remains
+      // bound to hold-pan below; the modifier-strict matcher in
+      // useKeyboardShortcuts dispatches Shift+Space to the press
+      // binding (modifiers=["shift"]) and bare Space to the hold
+      // binding (which explicitly skips when any modifier is
+      // held). Reads through timelineRef so this binding doesn't
+      // need to re-create whenever isPlaying flips — keeps the
+      // bindings useMemo deps stable.
+      {
+        kind: "press",
+        key: " ",
+        modifiers: ["shift"],
+        onPress: () => {
+          const t = timelineRef.current;
+          if (t.isPlaying) t.pause();
+          else t.play();
+        },
       },
       // Space-hold pan.
       { kind: "hold", key: " ", onEnter: enterPan, onExit: exitPan },
@@ -946,6 +1069,11 @@ function App() {
       </aside>
       <div className="Canvas" ref={containerRef} tabIndex={0}>
         <canvas id="canvas"></canvas>
+        {/* P2: replay scrubber. Positioned absolutely inside .Canvas
+            so it overlays the bottom of the viewport. Self-hides
+            when the timeline is empty. See
+            src/components/Scrubber.tsx and design_p2_slice.md §8. */}
+        <Scrubber timeline={timeline} />
       </div>
       {radialCenter && (
         <MarkerRadial
