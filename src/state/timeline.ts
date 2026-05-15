@@ -410,6 +410,9 @@ export function useTimeline(
         }
       }
     };
+    canvas.on("path:created", () => {
+      setTimeout(rebuild, 0); // run rebuild on next tick
+    });
     canvas.on("object:added", rebuild);
     canvas.on("object:removed", rebuild);
     rebuild();
